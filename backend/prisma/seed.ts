@@ -184,11 +184,34 @@ async function seedCatalog(storeId: number, list: Seed[], priceFactor = 1) {
 
 const monthsFromNow = (m: number) => { const d = new Date(); d.setMonth(d.getMonth() + m); return d; };
 
+/**
+ * DB cũ (nâng cấp từ bản 1 cửa hàng) chưa có super admin → tạo tài khoản mặc định để vào /super.
+ * Production: chỉ tạo khi có SEED_ADMIN_EMAIL + SEED_ADMIN_PASSWORD.
+ */
+async function ensureSuperAdmin() {
+  if (await prisma.user.count({ where: { role: 'SUPER_ADMIN' } })) return;
+  const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+  const email = (process.env.SEED_ADMIN_EMAIL || 'super@grocery.local').toLowerCase();
+  const password = process.env.SEED_ADMIN_PASSWORD || (isProd ? '' : '123456');
+  if (!password) {
+    console.log('⚠️  Chưa có super admin. Chạy: npm run create-super-admin -- <email> <mật khẩu>');
+    return;
+  }
+  const hash = await bcrypt.hash(password, 10);
+  await prisma.user.upsert({
+    where: { email },
+    create: { email, password: hash, fullName: 'Quản trị nền tảng', role: 'SUPER_ADMIN' },
+    update: { password: hash, role: 'SUPER_ADMIN', storeId: null, isActive: true },
+  });
+  console.log(`✅ Đã tạo super admin: ${email}${process.env.SEED_ADMIN_PASSWORD ? '' : ' / 123456 (hãy đổi mật khẩu sau khi đăng nhập)'}`);
+}
+
 async function main() {
   // An toàn cho CI/CD: chỉ seed khi DB trống, trừ khi FORCE_SEED=true (xoá sạch & seed lại)
   const force = process.env.FORCE_SEED === 'true';
   if (!force && (await prisma.user.count()) > 0) {
     console.log('ℹ️  DB đã có dữ liệu → bỏ qua seed (đặt FORCE_SEED=true để seed lại từ đầu)');
+    await ensureSuperAdmin();
     return;
   }
   if (force && process.env.VERCEL_ENV === 'production') throw new Error('Không cho phép FORCE_SEED trên production');

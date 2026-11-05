@@ -46,6 +46,7 @@ function LoginInner() {
         <p className="text-center text-sm text-slate-500">Chưa có tài khoản? <Link href={`/register${next ? `?next=${next}` : ''}`} className="link">Đăng ký ngay</Link></p>
         <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
           Tài khoản demo (mật khẩu <b>123456</b>):{' '}
+          <button type="button" className="link" onClick={() => { setEmail('super@grocery.local'); setPassword('123456'); }}>super@grocery.local</button>{' · '}
           <button type="button" className="link" onClick={() => { setEmail('admin@grocery.local'); setPassword('123456'); }}>admin@grocery.local</button>{' · '}
           <button type="button" className="link" onClick={() => { setEmail('customer@grocery.local'); setPassword('123456'); }}>customer@grocery.local</button>
         </div>
