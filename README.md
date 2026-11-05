@@ -22,7 +22,8 @@ grocery-store/
 │       └── admin/      # Trang quản trị
 ├── docker-compose.yml  # PostgreSQL 16
 ├── .github/workflows/  # CI/CD: test, deploy production & preview lên Vercel
-├── scripts/            # vercel-setup.sh (cài đặt 1 lần), smoke-test.sh
+├── scripts/            # dev.mjs (chạy local 1 lệnh), vercel-setup.sh, smoke-test.sh
+├── package.json        # npm run dev
 └── DEPLOY.md           # Hướng dẫn triển khai
 ```
 
@@ -66,28 +67,35 @@ Ví dụ *Mì Hảo Hảo*: thuộc tính `Hương vị` × `Quy cách` → 6 bi
 
 GitHub Actions sẽ test → migrate DB (Neon Postgres) → deploy API + Web lên Vercel mỗi khi push `main`. Mỗi Pull Request có link preview và nhánh DB riêng. Xem hướng dẫn cài đặt một lần trong **[DEPLOY.md](DEPLOY.md)**.
 
-## 🚀 Cài đặt & chạy (local)
+## 🚀 Chạy ở local – chỉ 1 lệnh
 
-Yêu cầu: Node.js ≥ 20, Docker (hoặc PostgreSQL có sẵn).
+Yêu cầu: **Node.js ≥ 20** và **PostgreSQL** đang chạy (DB có sẵn, hoặc `npm run db:up` để bật bằng Docker).
 
 ```bash
-# 1. Khởi động PostgreSQL
-docker compose up -d
-
-# 2. Backend
-cd backend
-cp .env.example .env
-npm install
-npx prisma migrate dev     # tạo bảng
-npm run db:seed            # dữ liệu mẫu (chỉ khi DB trống; FORCE_SEED=true npm run db:seed để làm lại)
-npm run start:dev          # http://localhost:4000/api
-
-# 3. Frontend (terminal khác)
-cd frontend
-cp .env.example .env.local
-npm install
-npm run dev                # http://localhost:3000
+npm run dev
 ```
+
+Lệnh này tự động:
+1. Tạo `backend/.env` và `frontend/.env.local` từ file mẫu (nếu chưa có)
+2. Kiểm tra kết nối PostgreSQL và port 3000/4000 còn trống
+3. `npm install` cho backend & frontend (lần đầu)
+4. Tạo database nếu chưa có → chạy migration → seed dữ liệu mẫu (chỉ khi DB trống)
+5. Chạy song song **API** (NestJS, tự reload) và **Web** (Next.js), log có tiền tố `[api]` / `[web]`. Nhấn **Ctrl+C** để dừng cả hai.
+
+| | URL |
+|---|---|
+| 🛒 Cửa hàng | http://localhost:3000 |
+| 🛠 Quản trị | http://localhost:3000/admin |
+| 🔌 API | http://localhost:4000/api |
+
+**PostgreSQL ở port / tài khoản khác mặc định** (`postgres:postgres@localhost:5432/grocery`):
+```bash
+npm run dev -- --db-port=5433
+npm run dev -- --db-url="postgresql://USER:PASS@localhost:5433/grocery?schema=public"
+```
+Giá trị được lưu vào `backend/.env`, các lần sau chỉ cần `npm run dev`.
+
+Các lệnh khác ở thư mục gốc: `npm run db:reset` (xoá DB & seed lại), `npm run db:studio` (xem dữ liệu bằng Prisma Studio), `npm run build`.
 
 ### Tài khoản demo (mật khẩu `123456`)
 | Vai trò | Email |
