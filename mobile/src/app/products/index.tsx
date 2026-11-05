@@ -9,9 +9,11 @@ import { Chip, Empty, Loading, Row, T } from '@/components/ui';
 import { api, qs } from '@/lib/api';
 import { useGrid } from '@/lib/layout';
 import { C, R } from '@/lib/theme';
-import type { Category, Paged, Product } from '@/lib/types';
+import { useStore } from '@/context/store';
+import type { Paged, Product } from '@/lib/types';
 
 const SORTS = [['newest', 'Mới nhất'], ['best_selling', 'Bán chạy'], ['price_asc', 'Giá ↑'], ['price_desc', 'Giá ↓'], ['name', 'A–Z']];
+const MARKET_SORTS = SORTS.filter(([k]) => k !== 'name');
 
 export default function ProductList() {
   const params = useLocalSearchParams<{ category?: string; search?: string; sort?: string; featured?: string; title?: string; focus?: string }>();
@@ -21,7 +23,10 @@ export default function ProductList() {
   const [category, setCategory] = useState(params.category ?? '');
   const [sort, setSort] = useState(params.sort ?? 'newest');
   const [inStock, setInStock] = useState(false);
-  const [cats, setCats] = useState<Category[]>([]);
+  // Chưa chọn cửa hàng → tìm trên toàn sàn
+  const shop = useStore();
+  const market = !shop.store;
+  const [cats, setCats] = useState<{ slug: string; name: string }[]>([]);
   const [items, setItems] = useState<Product[] | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -29,21 +34,27 @@ export default function ProductList() {
   const [scan, setScan] = useState(false);
   const input = useRef<any>(null);
 
-  useEffect(() => { api<Category[]>('/categories').then(setCats).catch(() => {}); if (params.focus) setTimeout(() => input.current?.focus(), 300); }, []); // eslint-disable-line
+  useEffect(() => { api<{ slug: string; name: string }[]>(market ? '/market/categories' : '/categories').then(setCats).catch(() => {}); if (params.focus) setTimeout(() => input.current?.focus(), 300); }, []); // eslint-disable-line
   useEffect(() => { const t = setTimeout(() => setQuery(search.trim()), 350); return () => clearTimeout(t); }, [search]);
 
   const load = useCallback(async (p: number) => {
-    const r = await api<Paged<Product>>('/products' + qs({ page: p, limit: 20, search: query, category, sort, featured: params.featured, inStock: inStock || undefined }));
+    const r = market
+      ? await api<Paged<Product>>('/market/products' + qs({ page: p, limit: 20, search: query, category, sort: sort === 'name' ? undefined : sort, featured: params.featured }))
+      : await api<Paged<Product>>('/products' + qs({ page: p, limit: 20, search: query, category, sort, featured: params.featured, inStock: inStock || undefined }));
     setItems((old) => (p === 1 ? r.items : [...(old ?? []), ...r.items]));
     setTotal(r.total); setPage(p); setMore(p < r.totalPages);
     return r;
-  }, [query, category, sort, inStock, params.featured]);
+  }, [query, category, sort, inStock, params.featured, market]);
   useEffect(() => { setItems(null); load(1).catch(() => setItems([])); }, [load]);
 
   /** Khách quét mã vạch trên bao bì → tìm sản phẩm */
   const onScan = async (code: string) => {
-    const r = await api<Paged<Product>>(`/products?search=${encodeURIComponent(code)}&limit=2`);
-    if (r.items.length === 1) router.push(`/products/${r.items[0].slug}`);
+    const r = await api<Paged<Product>>(`${market ? '/market/products' : '/products'}?search=${encodeURIComponent(code)}&limit=2`);
+    if (r.items.length === 1) {
+      const it = r.items[0];
+      if (market && it.store) await shop.selectSlug(it.store.slug).catch(() => {}); // mở đúng cửa hàng bán sản phẩm
+      router.push(`/products/${it.slug}`);
+    }
     else if (r.items.length) { setSearch(code); }
     else toast(`Không tìm thấy sản phẩm có mã ${code}`, 'error');
   };
@@ -55,17 +66,17 @@ export default function ProductList() {
       <View style={{ backgroundColor: C.white, paddingHorizontal: 16, paddingBottom: 10, gap: 10 }}>
         <Row style={{ height: 44, borderRadius: R.md, borderWidth: 1.5, borderColor: C.line, paddingHorizontal: 12 }}>
           <Ionicons name="search" size={18} color={C.faint} />
-          <TextInput testID="search-input" ref={input} value={search} onChangeText={setSearch} placeholder="Tìm sản phẩm, thương hiệu…" placeholderTextColor={C.faint} returnKeyType="search" style={{ flex: 1, fontSize: 15, color: C.ink, outlineStyle: 'none' as any }} />
+          <TextInput testID="search-input" ref={input} value={search} onChangeText={setSearch} placeholder={market ? 'Tìm trên toàn sàn…' : 'Tìm sản phẩm, thương hiệu…'} placeholderTextColor={C.faint} returnKeyType="search" style={{ flex: 1, fontSize: 15, color: C.ink, outlineStyle: 'none' as any }} />
           {!!search && <Pressable onPress={() => setSearch('')}><Ionicons name="close-circle" size={18} color={C.faint} /></Pressable>}
           <Pressable onPress={() => setScan(true)} accessibilityLabel="Quét mã vạch"><Ionicons name="barcode-outline" size={22} color={C.brand700} /></Pressable>
         </Row>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           <Chip label="Tất cả" active={!category} onPress={() => setCategory('')} />
-          {cats.map((c) => <Chip key={c.id} label={c.name} active={category === c.slug} onPress={() => setCategory(c.slug)} />)}
+          {cats.map((c) => <Chip key={c.slug} label={c.name} active={category === c.slug} onPress={() => setCategory(c.slug)} />)}
         </ScrollView>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {SORTS.map(([k, l]) => <Chip key={k} label={l} active={sort === k} onPress={() => setSort(k)} />)}
-          <Chip label="Còn hàng" icon="checkmark-done-outline" active={inStock} onPress={() => setInStock(!inStock)} />
+          {(market ? MARKET_SORTS : SORTS).map(([k, l]) => <Chip key={k} label={l} active={sort === k} onPress={() => setSort(k)} />)}
+          {!market && <Chip label="Còn hàng" icon="checkmark-done-outline" active={inStock} onPress={() => setInStock(!inStock)} />}
         </ScrollView>
       </View>
       {!items ? <Loading /> : (

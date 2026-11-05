@@ -9,7 +9,7 @@ import { useStore } from '@/context/store';
 import { api } from '@/lib/api';
 import { confirmAsync } from '@/lib/confirm';
 import { money } from '@/lib/format';
-import { expiryInfo, STORE_STATUS, type SuperStoreDetail } from '@/lib/super';
+import { BUSINESS_TYPES, expiryInfo, STORE_STATUS, type SuperStoreDetail } from '@/lib/super';
 import { C } from '@/lib/theme';
 import type { Plan, StoreStatus } from '@/lib/types';
 
@@ -64,6 +64,19 @@ export default function SuperStoreScreen() {
           {s.status !== 'ACTIVE' && <Button title="Kích hoạt" icon="play-outline" variant="outline" size="sm" onPress={() => setStatus('ACTIVE')} />}
           {s.status === 'ACTIVE' && <Button testID="suspend" title="Tạm ngưng" icon="pause-outline" variant="outline" size="sm" onPress={() => setStatus('SUSPENDED')} />}
         </Row>
+      </Card>
+
+      <Card style={{ gap: 6 }}>
+        <T variant="h3">Thông tin đối tác</T>
+        {([
+          ['Loại hình', s.businessType ? BUSINESS_TYPES[s.businessType] ?? s.businessType : null], ['Tên DN / HKD', s.businessName], ['Mã số thuế', s.taxCode],
+          ['Người đại diện', s.representative], ['CCCD', s.representativeId], ['SĐT đại diện', s.representativePhone],
+          ['TK đối soát', s.bankAccountNo ? `${s.bankAccountNo}${s.bankName ? ` · ${s.bankName}` : ''}` : null], ['Chủ TK', s.bankAccountName],
+          ['Hợp đồng', s.contractNo ? `${s.contractNo}${s.contractSignedAt ? ` · ${new Date(s.contractSignedAt).toLocaleDateString('vi-VN')}` : ''}` : null],
+        ] as [string, string | null | undefined][]).map(([k, v]) => (
+          <Row key={k} style={{ justifyContent: 'space-between' }}><T variant="muted">{k}</T><Text style={{ color: v ? C.ink : C.faint, fontWeight: '600', flexShrink: 1, textAlign: 'right' }}>{v || 'Chưa có'}</Text></Row>
+        ))}
+        {!!s.representativePhone && <Button title="Gọi người đại diện" icon="call-outline" variant="outline" size="sm" onPress={() => Linking.openURL(`tel:${s.representativePhone}`)} />}
       </Card>
 
       <Row gap={10} style={{ flexWrap: 'wrap' }}>

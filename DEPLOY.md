@@ -82,7 +82,7 @@ Khi chưa có secrets Vercel, workflow vẫn chạy job **test** và bỏ qua de
 | `SHIPPING_FEE`, `FREE_SHIPPING_THRESHOLD` | setup script, sửa được trên dashboard |
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | setup script, chỉ dùng khi seed DB trống – tạo tài khoản **Super Admin** của nền tảng (production không tạo dữ liệu demo) |
 
-**grocery-store-web**: `NEXT_PUBLIC_API_URL` (workflow luôn ghi đè lúc build cho đúng API production/preview).
+**grocery-store-web**: `NEXT_PUBLIC_ROOT_DOMAIN` (tuỳ chọn – bật subdomain riêng cho đối tác, cần domain wildcard `*.tenmien` trên Vercel + bản ghi DNS wildcard và thêm `https://*.tenmien` vào `CORS_ORIGIN` của API), `NEXT_PUBLIC_API_URL` (workflow luôn ghi đè lúc build cho đúng API production/preview).
 
 Đổi biến xong cần deploy lại (Run workflow) để có hiệu lực.
 

@@ -8,7 +8,7 @@ import { BankTransfer } from '@/components/BankTransfer';
 import { OrderTimeline } from '@/components/OrderTimeline';
 import { toast } from '@/components/Toast';
 import { Button, Card, Empty, Loading, Row, StatusPill, T } from '@/components/ui';
-import { addToStoredCart, useCart, type CartItem } from '@/context/cart';
+import { useCart, type CartItem } from '@/context/cart';
 import { FALLBACK_SETTINGS, useStoreSettings } from '@/context/settings';
 import { useStore } from '@/context/store';
 import { api, imageUrl } from '@/lib/api';
@@ -64,8 +64,8 @@ export default function OrderDetail() {
       } catch {}
     }
     if (!add.length) return toast('Sản phẩm trong đơn đã hết hàng', 'error');
-    await addToStoredCart(slug, add);
-    try { if (shop.store?.slug !== slug) await shop.selectSlug(slug); else await cart.reload(); } catch (e: any) { return toast(e.message, 'error'); }
+    add.forEach(({ quantity, ...it }) => cart.addTo({ slug, name: o.store!.name }, it, quantity));
+    try { if (shop.store?.slug !== slug) await shop.selectSlug(slug); } catch (e: any) { return toast(e.message, 'error'); }
     toast(`Đã thêm ${add.length} sản phẩm vào giỏ`); router.push('/cart');
   };
 

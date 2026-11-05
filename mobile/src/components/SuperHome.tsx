@@ -59,10 +59,10 @@ export function SuperHome() {
               <Text style={{ flex: 1, color: '#92400e', fontWeight: '600' }}>{d.stores.expiringSoon} cửa hàng sắp hết hạn · {d.stores.expired} đã hết hạn</Text>
             </Pressable>
           )}
-          <Button testID="super-new-store" title="Thêm cửa hàng (đối tác)" icon="add-circle-outline" onPress={() => router.push('/super/new-store')} />
+          <Button testID="super-new-store" title="Thêm đối tác" icon="add-circle-outline" onPress={() => router.push('/super/new-store')} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: R.md, borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, backgroundColor: C.white }}>
             <Ionicons name="search" size={18} color={C.faint} />
-            <TextInput value={q} onChangeText={setQ} placeholder="Tìm tên, slug, SĐT, email chủ…" placeholderTextColor={C.faint} style={{ flex: 1, height: 44, color: C.ink }} />
+            <TextInput value={q} onChangeText={setQ} placeholder="Tên, SĐT, email, MST, người đại diện…" placeholderTextColor={C.faint} style={{ flex: 1, height: 44, color: C.ink }} />
           </View>
           <Row gap={8} style={{ flexWrap: 'wrap' }}>
             {([['', 'Tất cả'], ['soon', 'Sắp hết hạn'], ['expired', 'Hết hạn'], ['SUSPENDED', 'Tạm ngưng']] as const).map(([k, l]) => <Chip key={k} label={l} active={filter === k} onPress={() => setFilter(k)} />)}
@@ -75,7 +75,7 @@ export function SuperHome() {
         return (
           <Card testID={`super-store-${s.slug}`} onPress={() => router.push(`/super/store/${s.id}`)} style={{ gap: 6 }}>
             <Row style={{ justifyContent: 'space-between' }}><Text style={{ fontWeight: '800', color: C.ink, flex: 1 }} numberOfLines={1}>{s.name}</Text><StatusPill map={STORE_STATUS} value={s.status} /></Row>
-            <T variant="muted" style={{ fontSize: 12 }} numberOfLines={1}>/s/{s.slug}{s.owner ? ` · ${s.owner.email}` : ''}</T>
+            <T variant="muted" style={{ fontSize: 12 }} numberOfLines={1}>{s.businessName ? `${s.businessName} · ` : ''}{s.owner?.email ?? `/s/${s.slug}`}</T>
             <Row style={{ justifyContent: 'space-between' }}>
               <Text style={{ fontSize: 12, color: C.text }}>{s.plan?.name ?? 'Chưa có gói'} · {s._count.products} SP · {s._count.orders} đơn</Text>
               <Text style={{ fontSize: 12, fontWeight: '700', color: e.color }}>{e.text}</Text>

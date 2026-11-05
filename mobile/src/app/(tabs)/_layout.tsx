@@ -6,7 +6,7 @@ import { C } from '@/lib/theme';
 
 export default function TabsLayout() {
   const { isStaff, isSuper, loading } = useAuth();
-  const { count } = useCart();
+  const { totalCount: count } = useCart();
   const icon = (name: keyof typeof Ionicons.glyphMap) => ({ color, size }: { color: unknown; size: number }) => <Ionicons name={name} size={size} color={color as string} />;
   return (
     <Tabs screenOptions={{ tabBarActiveTintColor: C.brand600, tabBarInactiveTintColor: C.faint, headerShadowVisible: false, tabBarLabelStyle: { fontSize: 11, fontWeight: '600' }, sceneStyle: { backgroundColor: C.bg } }}>

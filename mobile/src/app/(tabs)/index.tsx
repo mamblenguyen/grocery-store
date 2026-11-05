@@ -9,7 +9,7 @@ import { Loading, Row, SectionHeader, T } from '@/components/ui';
 import { useNotifications } from '@/context/notifications';
 import { useSettings } from '@/context/settings';
 import { useStore } from '@/context/store';
-import { PlatformIntro, StorePicker } from '@/components/StorePicker';
+import { MarketHome } from '@/components/MarketHome';
 import { api, imageUrl } from '@/lib/api';
 import { money } from '@/lib/format';
 import { useGrid } from '@/lib/layout';
@@ -20,18 +20,15 @@ export default function Home() {
   const { store, ready } = useStore();
   if (!ready) return <Loading />;
   // Chưa chọn cửa hàng → hiện danh bạ cửa hàng của nền tảng
-  if (!store)
-    return (
-      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.bg }}>
-        <StorePicker header={<PlatformIntro />} />
-      </SafeAreaView>
-    );
+  // Chưa vào cửa hàng nào → trang chủ sàn (hàng hoá của mọi đối tác)
+  if (!store) return <MarketHome />;
   return <StoreHome key={store.slug} />;
 }
 
 function StoreHome() {
   const { settings } = useSettings();
-  const { store } = useStore();
+  const shop = useStore();
+  const { store } = shop;
   const { unread } = useNotifications();
   const { item, width, isTablet } = useGrid();
   const [cats, setCats] = useState<Category[]>([]);
@@ -76,6 +73,9 @@ function StoreHome() {
               <Ionicons name="chevron-down" size={18} color={C.brand700} />
             </Row>
             <Text style={st.slogan} numberOfLines={1}>{settings.slogan || 'Chạm để đổi cửa hàng'}</Text>
+          </Pressable>
+          <Pressable testID="back-to-market" onPress={() => shop.clear()} style={[st.bell, { marginRight: 8 }]} accessibilityLabel="Về sàn">
+            <Ionicons name="apps-outline" size={20} color={C.brand700} />
           </Pressable>
           <Pressable testID="bell" onPress={() => router.push('/account/notifications')} style={st.bell} accessibilityLabel="Thông báo">
             <Ionicons name="notifications-outline" size={22} color={C.ink} />

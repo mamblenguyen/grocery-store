@@ -34,7 +34,13 @@ export function ProductCard({ p, width }: { p: Product; width: number }) {
   const single = active.length === 1 ? active[0] : null;
 
   const quickAdd = () => {
-    if (!single || otherStore) return open();
+    if (!single) return open();
+    // Sản phẩm của cửa hàng khác (trang sàn) → thêm thẳng vào giỏ của cửa hàng đó
+    if (otherStore) {
+      const line = { variantId: single.id, productId: p.id, slug: p.slug, productName: p.name, variantName: single.name, image: p.thumbnail, price: single.price, stock: single.stock };
+      if (!cart.addTo({ slug: p.store!.slug, name: p.store!.name }, line)) return toast(`Chỉ còn ${single.stock} sản phẩm`, 'error');
+      return toast(`Đã thêm "${p.name}" vào giỏ ${p.store!.name}`);
+    }
     const inCart = cart.items.find((i) => i.variantId === single.id)?.quantity ?? 0;
     if (inCart >= single.stock) return toast(`Chỉ còn ${single.stock} sản phẩm`, 'error');
     cart.add({ variantId: single.id, productId: p.id, slug: p.slug, productName: p.name, variantName: single.name, image: p.thumbnail, price: single.price, stock: single.stock });
@@ -52,7 +58,9 @@ export function ProductCard({ p, width }: { p: Product; width: number }) {
         {out && <View style={st.out}><Text style={st.outT}>Tạm hết hàng</Text></View>}
       </View>
       <View style={{ padding: 10, flex: 1 }}>
-        <Text style={st.brand} numberOfLines={1}>{(p.brand || p.category?.name || '').toUpperCase()}</Text>
+        {otherStore ? (
+          <Text style={[st.brand, { color: C.brand700 }]} numberOfLines={1}>🏪 {p.store!.name}</Text>
+        ) : <Text style={st.brand} numberOfLines={1}>{(p.brand || p.category?.name || '').toUpperCase()}</Text>}
         <Text style={st.name} numberOfLines={2}>{p.name}</Text>
         <View style={{ height: 16, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           {p.ratingCount > 0 && <><Stars value={p.ratingAvg} size={11} /><Text style={st.meta}>({p.ratingCount})</Text></>}

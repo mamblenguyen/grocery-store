@@ -114,3 +114,6 @@ export interface StockDoc {
 }
 
 export interface Paged<T> { items: T[]; total: number; page: number; limit: number; totalPages: number }
+
+/** Danh mục gộp toàn sàn */
+export interface MarketCategory { slug: string; name: string; image: string | null; productCount: number; stores: number }

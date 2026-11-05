@@ -6,7 +6,14 @@ export const STORE_STATUS: Record<StoreStatus, { label: string; fg: string; bg: 
   CLOSED: { label: 'Đã đóng', fg: '#334155', bg: '#e2e8f0' },
 };
 
-export interface SuperStore {
+export const BUSINESS_TYPES: Record<string, string> = { HKD: 'Hộ kinh doanh', CONG_TY: 'Công ty', CA_NHAN: 'Cá nhân' };
+export interface PartnerInfo {
+  businessName?: string | null; businessType?: string | null; taxCode?: string | null; businessAddress?: string | null;
+  representative?: string | null; representativeId?: string | null; representativePhone?: string | null;
+  bankName?: string | null; bankAccountNo?: string | null; bankAccountName?: string | null; contractNo?: string | null; contractSignedAt?: string | null;
+}
+
+export interface SuperStore extends PartnerInfo {
   id: number; slug: string; name: string; phone?: string | null; email?: string | null; address?: string | null;
   status: StoreStatus; planId: number | null; planExpiresAt: string | null; note?: string | null; createdAt: string;
   plan: Pick<Plan, 'id' | 'code' | 'name' | 'priceMonthly' | 'maxProducts' | 'maxStaff'> | null;

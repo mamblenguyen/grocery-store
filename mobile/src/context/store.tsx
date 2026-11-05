@@ -20,7 +20,16 @@ const Ctx = createContext<StoreCtx>(null as any);
 export function parseStoreCode(raw: string): string | null {
   const t = raw.trim();
   const m = t.match(/\/s\/([a-z0-9-]{3,})/i) ?? t.match(/^store:([a-z0-9-]{3,})$/i) ?? t.match(/^([a-z0-9-]{3,})$/i);
-  return m ? m[1].toLowerCase() : null;
+  if (m) return m[1].toLowerCase();
+  // Link subdomain riêng của đối tác: https://<slug>.<tên miền sàn>/…
+  try {
+    const host = new URL(t).hostname.toLowerCase();
+    const parts = host.split('.');
+    const root = (process.env.EXPO_PUBLIC_ROOT_DOMAIN || '').split(':')[0].toLowerCase();
+    if (root && host.endsWith(`.${root}`)) { const sub = host.slice(0, -(root.length + 1)); return sub && sub !== 'www' && !sub.includes('.') ? sub : null; }
+    if (parts.length >= 3 && parts[0] !== 'www' && /^[a-z0-9-]{3,}$/.test(parts[0])) return parts[0];
+  } catch {}
+  return null;
 }
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {

@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
-import { Button, Empty, Loading } from '@/components/ui';
+import { Loading } from '@/components/ui';
 import { useStore } from '@/context/store';
 import { api, imageUrl } from '@/lib/api';
 import { C, R, shadow } from '@/lib/theme';
@@ -12,8 +12,13 @@ import type { Category } from '@/lib/types';
 export default function Categories() {
   const { store } = useStore();
   const [cats, setCats] = useState<Category[] | null>(null);
-  useEffect(() => { if (store) { setCats(null); api<Category[]>('/categories').then(setCats).catch(() => setCats([])); } }, [store?.slug]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!store) return <Empty icon="storefront-outline" text="Hãy chọn cửa hàng để xem danh mục"><Button title="Chọn cửa hàng" onPress={() => router.push('/stores')} /></Empty>;
+  // Chưa vào cửa hàng → danh mục gộp của toàn sàn
+  useEffect(() => {
+    setCats(null);
+    (store ? api<Category[]>('/categories') : api<{ slug: string; name: string; image: string | null; productCount: number }[]>('/market/categories', { store: null })
+      .then((l) => l.map((c, i) => ({ id: i + 1, slug: c.slug, name: c.name, image: c.image, _count: { products: c.productCount } }) as unknown as Category)))
+      .then(setCats).catch(() => setCats([]));
+  }, [store?.slug]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!cats) return <Loading />;
   return (
     <FlatList

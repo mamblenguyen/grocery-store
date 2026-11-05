@@ -40,11 +40,23 @@ grocery-store/
 └── DEPLOY.md           # Hướng dẫn triển khai
 ```
 
+## 🛍 Sàn thương mại điện tử + subdomain riêng cho đối tác
+
+- **Trang chủ sàn** (`/`): hàng hoá của **tất cả đối tác** – danh mục gộp, giá sốc, bán chạy, hàng mới, gợi ý; tìm & lọc trên toàn sàn (`/products`) để so giá giữa các cửa hàng. Mỗi sản phẩm ghi rõ cửa hàng bán.
+- **Giỏ hàng chung** (`/cart`): thêm hàng từ nhiều cửa hàng, giỏ tự chia nhóm theo cửa hàng; mỗi nhóm thanh toán & giao riêng (theo phí ship, tài khoản ngân hàng, mã giảm giá của từng cửa hàng).
+- **Danh bạ cửa hàng**: `/stores`.
+- **Subdomain riêng**: đặt `NEXT_PUBLIC_ROOT_DOMAIN=tensan.vn` (frontend) → đối tác `tap-hoa-xanh` có website `https://tap-hoa-xanh.tensan.vn` (vẫn dùng được `/s/tap-hoa-xanh`). Trên subdomain, các trang đăng nhập / tài khoản / đơn hàng tự chuyển về tên miền sàn; **đăng nhập 1 lần dùng chung** cho sàn và mọi subdomain (cookie trên tên miền gốc), đăng xuất cũng đồng bộ.
+  - DNS: tạo bản ghi wildcard `*.tensan.vn` (CNAME/A) trỏ về nơi chạy web; trên Vercel thêm domain `tensan.vn` và `*.tensan.vn` vào project web.
+  - Backend: thêm vào `CORS_ORIGIN` cả `https://tensan.vn,https://*.tensan.vn`.
+  - Thử ở máy: `NEXT_PUBLIC_ROOT_DOMAIN=lvh.me:3000` (mọi `*.lvh.me` trỏ về 127.0.0.1) rồi mở http://lvh.me:3000 và http://tap-hoa-xanh.lvh.me:3000; nhớ thêm `http://lvh.me:3000,http://*.lvh.me:3000` vào `CORS_ORIGIN` của backend.
+  - Giỏ hàng lưu theo trình duyệt & tên miền: hàng thêm trên subdomain nằm ở giỏ của subdomain đó.
+- App: trang chủ là sàn (hàng của mọi cửa hàng), giỏ hàng chung chia theo cửa hàng, quét QR (kể cả link subdomain) để vào cửa hàng.
+
 ## 🏢 Nền tảng đa cửa hàng
 
 | Vai trò | Vào đâu | Làm được gì |
 |---|---|---|
-| **Super Admin** (bạn) | `/super` (web) · tab **Nền tảng** (app) | Tổng quan (số cửa hàng, MRR, GMV, sắp hết hạn), **tạo cửa hàng + tài khoản chủ**, đổi gói, **gia hạn** (tự ghi phiếu thu), tạm ngưng / mở lại / đóng, đặt lại mật khẩu, quản lý gói dịch vụ, phiếu thu, toàn bộ người dùng, **"Quản trị hộ"** bất kỳ cửa hàng nào |
+| **Super Admin** (bạn) | `/super` (web) · tab **Nền tảng** (app) | Tổng quan (số cửa hàng, MRR, GMV, sắp hết hạn), **tạo đối tác** kèm **thông tin đối tác** (loại hình, tên DN/HKD, MST, người đại diện, CCCD, tài khoản đối soát, số & ngày hợp đồng – chỉ super admin xem), cửa hàng + subdomain + tài khoản chủ, đổi gói, **gia hạn** (tự ghi phiếu thu), tạm ngưng / mở lại / đóng, đặt lại mật khẩu, quản lý gói dịch vụ, phiếu thu, toàn bộ người dùng, **"Quản trị hộ"** bất kỳ cửa hàng nào |
 | **Chủ cửa hàng** (ADMIN) | `/admin` | Toàn quyền cửa hàng của mình + thêm **nhân viên**, cài đặt, xem **gói dịch vụ** (mức dùng, hạn, lịch sử thanh toán, **mã QR cửa hàng** để in dán quầy) |
 | **Nhân viên** (STAFF) | `/admin` · tab **Quản lý** | POS, kho, đơn hàng, báo cáo của cửa hàng mình |
 | **Khách hàng** | `/` → chọn cửa hàng → `/s/<slug>` | 1 tài khoản dùng chung mọi cửa hàng; giỏ hàng riêng từng cửa hàng; đơn hàng tổng hợp có tên cửa hàng |
@@ -225,4 +237,4 @@ Trình duyệt chỉ cho mở camera trên **HTTPS** hoặc **http://localhost**
 ## ⚙️ Biến môi trường
 
 **backend/.env**: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `BLOB_READ_WRITE_TOKEN`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_URL`, `VNPAY_RETURN_URL`
-**frontend/.env.local**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_PLATFORM_NAME` (tên nền tảng, mặc định "Chợ Tạp Hoá"), `NEXT_PUBLIC_PLATFORM_HOTLINE` (hiện ở trang giới thiệu cho đối tác)
+**frontend/.env.local**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_ROOT_DOMAIN` (bật subdomain cho đối tác), `NEXT_PUBLIC_PLATFORM_NAME` (tên nền tảng, mặc định "Chợ Tạp Hoá"), `NEXT_PUBLIC_PLATFORM_HOTLINE` (hiện ở trang giới thiệu cho đối tác)
