@@ -17,8 +17,17 @@ export class StockController {
     return this.service.byIds(ids.split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 500));
   }
 
-  @Get('variants') variants(@Query('search') search = '') {
-    return this.service.searchVariants(search);
+  @Get('variants') variants(
+    @Query('search') search = '',
+    @Query('limit') limit?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('sellable') sellable?: string,
+  ) {
+    return this.service.searchVariants(search.trim(), {
+      limit: Number(limit) || 20,
+      categoryId: Number(categoryId) || undefined,
+      sellable: sellable === '1' || sellable === 'true',
+    });
   }
 
   @Get('expiring') expiring(@Query('days') days?: string) {

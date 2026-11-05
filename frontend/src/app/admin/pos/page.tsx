@@ -32,6 +32,9 @@ export default function PosPage() {
   const toast = useToast();
   const { settings } = useSettings();
   const [quick, setQuick] = useState<PickedVariant[]>([]);
+  const [cats, setCats] = useState<{ id: number; name: string }[]>([]);
+  const [cat, setCat] = useState<number | null>(null);
+  const [gridQ, setGridQ] = useState('');
   const [bills, setBills] = useState<Bill[]>([newBill(1)]);
   const [active, setActive] = useState(0);
   const [q, setQ] = useState('');
@@ -54,7 +57,8 @@ export default function PosPage() {
       setCamera(localStorage.getItem('pos_camera') === '1');
     } catch {}
     setReady(true);
-    api<PickedVariant[]>('/admin/stock/variants?search=').then((r) => setQuick(r.filter((v) => v.isActive && v.product.isActive)));
+    api<PickedVariant[]>('/admin/stock/variants?sellable=1&limit=1000').then(setQuick);
+    api<{ id: number; name: string }[]>('/categories').then(setCats).catch(() => {});
   }, []);
   useEffect(() => { if (ready) try { localStorage.setItem(STORE_KEY, JSON.stringify({ bills, active })); } catch {} }, [bills, active, ready]);
   useEffect(() => { if (ready) try { localStorage.setItem('pos_camera', camera ? '1' : '0'); } catch {} }, [camera, ready]);
@@ -225,9 +229,16 @@ export default function PosPage() {
           </div>
         </div>
         <div className="card p-4">
-          <h3 className="mb-3 text-sm font-bold text-ink">Chọn nhanh</h3>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
-            {quick.map((v) => (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <h3 className="mr-1 text-sm font-bold text-ink">Chọn nhanh <span className="font-normal text-slate-400">({quick.length} mặt hàng)</span></h3>
+            <input className="input h-9 w-44 py-1" placeholder="Lọc nhanh…" value={gridQ} onChange={(e) => setGridQ(e.target.value)} />
+          </div>
+          <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
+            <button className={`chip shrink-0 text-xs ${cat === null ? 'chip-active' : ''}`} onClick={() => setCat(null)}>Tất cả</button>
+            {cats.map((c) => <button key={c.id} className={`chip shrink-0 text-xs ${cat === c.id ? 'chip-active' : ''}`} onClick={() => setCat(c.id)}>{c.name}</button>)}
+          </div>
+          <div className="grid max-h-[60vh] grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+            {quick.filter((v) => (cat === null || (v.product as any).categoryId === cat) && (!gridQ.trim() || `${v.product.name} ${v.name} ${v.sku}`.toLowerCase().includes(gridQ.trim().toLowerCase()))).map((v) => (
               <button key={v.id} onClick={() => add(v, mult) && setMult(1)} disabled={v.stock <= 0} className="flex items-center gap-2 rounded-xl border border-slate-200 p-2 text-left transition hover:border-brand-400 hover:bg-brand-50/40 active:scale-[0.98] disabled:opacity-40">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imageUrl(v.image || v.product.thumbnail)} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />

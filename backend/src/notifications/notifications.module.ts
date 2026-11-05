@@ -31,8 +31,9 @@ export class NotificationsService {
     if (tokens.length) this.sendPush(tokens.map((t) => t.token), n).catch((e) => this.log.warn(`Push lỗi: ${e.message}`));
   }
 
-  async notifyStaff(n: NotifyInput) {
-    const staff = await this.prisma.user.findMany({ where: { role: { in: ['ADMIN', 'STAFF'] }, isActive: true }, select: { id: true } });
+  /** Báo cho nhân viên của 1 cửa hàng */
+  async notifyStaff(storeId: number, n: NotifyInput) {
+    const staff = await this.prisma.user.findMany({ where: { storeId, role: { in: ['ADMIN', 'STAFF'] }, isActive: true }, select: { id: true } });
     return this.notify(staff.map((s) => s.id), n);
   }
 
@@ -50,6 +51,12 @@ export class NotificationsService {
       const dead = (json?.data ?? []).map((r: any, idx: number) => (r?.details?.error === 'DeviceNotRegistered' ? valid[i + idx] : null)).filter(Boolean);
       if (dead.length) await this.prisma.pushToken.deleteMany({ where: { token: { in: dead } } });
     }
+  }
+
+  /** Báo cho toàn bộ super admin */
+  async notifySuper(n: NotifyInput) {
+    const admins = await this.prisma.user.findMany({ where: { role: 'SUPER_ADMIN', isActive: true }, select: { id: true } });
+    return this.notify(admins.map((a) => a.id), n);
   }
 
   async list(userId: number, q: PaginationDto) {

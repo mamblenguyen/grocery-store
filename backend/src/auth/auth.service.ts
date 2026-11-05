@@ -43,7 +43,19 @@ export class AuthService {
   }
 
   async me(id: number) {
-    return toPublicUser(await this.prisma.user.findUniqueOrThrow({ where: { id } }));
+    const u = await this.prisma.user.findUniqueOrThrow({
+      where: { id },
+      include: { store: { include: { plan: { select: { id: true, name: true, maxProducts: true, maxStaff: true } } } } },
+    });
+    const { store, ...rest } = u;
+    return {
+      ...toPublicUser(rest as any),
+      store: store && {
+        id: store.id, slug: store.slug, name: store.name, status: store.status, logo: store.logo,
+        planExpiresAt: store.planExpiresAt, plan: store.plan,
+        daysLeft: store.planExpiresAt ? Math.ceil((store.planExpiresAt.getTime() - Date.now()) / 86400000) : null,
+      },
+    };
   }
 
   async updateProfile(id: number, dto: UpdateProfileDto) {

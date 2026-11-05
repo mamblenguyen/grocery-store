@@ -14,11 +14,10 @@ export class PaymentsService {
 
   /** Tạo link thanh toán VNPay cho đơn hàng của chính khách */
   async createVnpayUrl(orderId: number, userId: number, ip: string) {
-    const s = await this.settings.getPublic();
-    if (!s.payment.vnpay) throw new BadRequestException('Cửa hàng chưa bật thanh toán VNPay');
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new NotFoundException('Không tìm thấy đơn hàng');
-    if (order.userId !== userId) throw new ForbiddenException();
+    if (!order || order.userId !== userId) throw new NotFoundException('Không tìm thấy đơn hàng');
+    const s = await this.settings.getPublic(order.storeId);
+    if (!s.payment.vnpay) throw new BadRequestException('Cửa hàng chưa bật thanh toán VNPay');
     if (order.paymentStatus === 'PAID') throw new BadRequestException('Đơn hàng đã được thanh toán');
     if (order.status === 'CANCELLED') throw new BadRequestException('Đơn hàng đã bị huỷ');
 
@@ -94,7 +93,7 @@ export class PaymentsService {
       const o = txn.order;
       const data = { orderId: o.id, url: `/orders/${o.id}` };
       if (o.userId) this.notifications.notify([o.userId], { type: 'PAYMENT', title: 'Thanh toán thành công', body: `Đơn ${o.code} đã được thanh toán ${o.total.toLocaleString('vi-VN')}₫ qua VNPay`, data }).catch(() => {});
-      this.notifications.notifyStaff({ type: 'PAYMENT', title: `💳 VNPay: ${o.code}`, body: `Đã nhận ${o.total.toLocaleString('vi-VN')}₫`, data: { ...data, url: `/admin/orders/${o.id}` } }).catch(() => {});
+      this.notifications.notifyStaff(o.storeId, { type: 'PAYMENT', title: `💳 VNPay: ${o.code}`, body: `Đã nhận ${o.total.toLocaleString('vi-VN')}₫`, data: { ...data, url: `/admin/orders/${o.id}` } }).catch(() => {});
     }
     return { RspCode: '00', Message: 'Confirm Success', orderId: txn.orderId, success } as const;
   }

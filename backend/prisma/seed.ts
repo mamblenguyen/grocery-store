@@ -135,56 +135,20 @@ const products: Seed[] = [
   },
 ];
 
-async function main() {
-  // An toàn cho CI/CD: chỉ seed khi DB trống, trừ khi FORCE_SEED=true (xoá sạch & seed lại)
-  const force = process.env.FORCE_SEED === 'true';
-  if (!force && (await prisma.user.count()) > 0) {
-    console.log('ℹ️  DB đã có dữ liệu → bỏ qua seed (đặt FORCE_SEED=true để seed lại từ đầu)');
-    return;
-  }
-  if (force && process.env.VERCEL_ENV === 'production') throw new Error('Không cho phép FORCE_SEED trên production');
-  console.log('🌱 Seeding...');
-  await prisma.inventoryLog.deleteMany();
-  await prisma.stockDocument.deleteMany();
-  await prisma.supplier.deleteMany();
-  await prisma.paymentTransaction.deleteMany();
-  await prisma.review.deleteMany();
-  await prisma.wishlistItem.deleteMany();
-  await prisma.address.deleteMany();
-  await prisma.orderItem.deleteMany();
-  await prisma.order.deleteMany();
-  await prisma.product.deleteMany();
-  await prisma.category.deleteMany();
-  await prisma.coupon.deleteMany();
-  await prisma.user.deleteMany();
-
-  // Production: SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD (do scripts/vercel-setup.sh sinh ngẫu nhiên)
-  // Local/CI: dùng tài khoản demo mật khẩu 123456
-  const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@grocery.local';
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD || '123456';
-  const isDemo = !process.env.SEED_ADMIN_PASSWORD;
-  await prisma.user.create({
-    data: { email: adminEmail.toLowerCase(), password: await bcrypt.hash(adminPassword, 10), fullName: 'Quản trị viên', role: 'ADMIN' },
-  });
-  if (isDemo) {
-    const pwd = await bcrypt.hash('123456', 10);
-    await prisma.user.create({ data: { email: 'staff@grocery.local', password: pwd, fullName: 'Nhân viên bán hàng', role: 'STAFF' } });
-    await prisma.user.create({
-      data: { email: 'customer@grocery.local', password: pwd, fullName: 'Nguyễn Văn A', phone: '0901234567', address: '123 Lê Lợi, Q.1, TP.HCM' },
-    });
-  }
-
+/** Tạo danh mục + sản phẩm + biến thể cho 1 cửa hàng */
+async function seedCatalog(storeId: number, list: Seed[], priceFactor = 1) {
   const catMap: Record<string, number> = {};
   for (const [i, c] of categories.entries()) {
-    const created = await prisma.category.create({ data: { ...c, slug: slugify(c.name), sortOrder: i } });
+    if (!list.some((p) => p.category === c.name)) continue;
+    const created = await prisma.category.create({ data: { ...c, slug: slugify(c.name), sortOrder: i, storeId } });
     catMap[c.name] = created.id;
   }
-
-  for (const p of products) {
-    const prices = Object.values(p.variants).map((v) => v.price);
+  for (const p of list) {
+    const variants = Object.fromEntries(Object.entries(p.variants).map(([k, v]) => [k, { ...v, price: Math.round((v.price * priceFactor) / 500) * 500, compareAtPrice: v.compareAtPrice && Math.round((v.compareAtPrice * priceFactor) / 500) * 500 }]));
+    const prices = Object.values(variants).map((v) => v.price);
     const product = await prisma.product.create({
       data: {
-        name: p.name, slug: slugify(p.name), description: p.description, brand: p.brand, unit: p.unit,
+        storeId, name: p.name, slug: slugify(p.name), description: p.description, brand: p.brand, unit: p.unit,
         isFeatured: !!p.featured, categoryId: catMap[p.category],
         thumbnail: img(slugify(p.name)), images: [img(slugify(p.name)), img(slugify(p.name) + '-2')],
         minPrice: Math.min(...prices), maxPrice: Math.max(...prices),
@@ -200,11 +164,11 @@ async function main() {
     }
     let pos = 0;
     const prefix = slugify(p.brand).replace(/-/g, '').slice(0, 4).toUpperCase();
-    for (const [key, v] of Object.entries(p.variants)) {
+    for (const [key, v] of Object.entries(variants)) {
       const parts = p.options.length ? key.split(' / ') : [];
       const variant = await prisma.productVariant.create({
         data: {
-          productId: product.id, name: key, position: pos,
+          storeId, productId: product.id, name: key, position: pos,
           sku: `${prefix}-${product.id}-${String(++pos).padStart(2, '0')}`,
           barcode: ean13(barcodeSeq++),
           price: v.price, compareAtPrice: v.compareAtPrice, costPrice: Math.round(v.price * 0.8), stock: v.stock,
@@ -212,24 +176,122 @@ async function main() {
         },
       });
       if (v.stock > 0)
-        await prisma.inventoryLog.create({ data: { variantId: variant.id, change: v.stock, stockAfter: v.stock, reason: 'IMPORT', note: 'Seed' } });
+        await prisma.inventoryLog.create({ data: { variantId: variant.id, change: v.stock, stockAfter: v.stock, unitCost: variant.costPrice, reason: 'IMPORT', note: 'Tồn kho ban đầu' } });
     }
   }
+}
+
+const monthsFromNow = (m: number) => { const d = new Date(); d.setMonth(d.getMonth() + m); return d; };
+
+async function main() {
+  // An toàn cho CI/CD: chỉ seed khi DB trống, trừ khi FORCE_SEED=true (xoá sạch & seed lại)
+  const force = process.env.FORCE_SEED === 'true';
+  if (!force && (await prisma.user.count()) > 0) {
+    console.log('ℹ️  DB đã có dữ liệu → bỏ qua seed (đặt FORCE_SEED=true để seed lại từ đầu)');
+    return;
+  }
+  if (force && process.env.VERCEL_ENV === 'production') throw new Error('Không cho phép FORCE_SEED trên production');
+  console.log('🌱 Seeding...');
+  await prisma.inventoryLog.deleteMany();
+  await prisma.paymentTransaction.deleteMany();
+  await prisma.review.deleteMany();
+  await prisma.wishlistItem.deleteMany();
+  await prisma.address.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.orderItem.deleteMany();
+  await prisma.order.deleteMany();
+  await prisma.storePayment.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.stockDocument.deleteMany(); // dòng phiếu kho chặn xoá biến thể (Restrict)
+  await prisma.store.deleteMany(); // cascade: danh mục, sản phẩm, mã giảm giá, NCC, phiếu kho, cài đặt
+  await prisma.plan.deleteMany();
+
+  // Gói dịch vụ
+  const [free, basic, pro] = await Promise.all([
+    prisma.plan.create({ data: { code: 'free', name: 'Miễn phí', description: 'Dùng thử cho cửa hàng nhỏ', priceMonthly: 0, maxProducts: 30, maxStaff: 1, sortOrder: 1 } }),
+    prisma.plan.create({ data: { code: 'basic', name: 'Cơ bản', description: 'Cửa hàng tạp hoá vừa', priceMonthly: 199000, maxProducts: 1000, maxStaff: 5, sortOrder: 2 } }),
+    prisma.plan.create({ data: { code: 'pro', name: 'Chuyên nghiệp', description: 'Không giới hạn sản phẩm & nhân viên', priceMonthly: 499000, maxProducts: null, maxStaff: null, sortOrder: 3 } }),
+  ]);
+
+  // Super admin – production: SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD; local: super@grocery.local / 123456
+  const isDemo = !process.env.SEED_ADMIN_PASSWORD;
+  const superEmail = (process.env.SEED_ADMIN_EMAIL || 'super@grocery.local').toLowerCase();
+  const superAdmin = await prisma.user.create({
+    data: { email: superEmail, password: await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD || '123456', 10), fullName: 'Quản trị nền tảng', role: 'SUPER_ADMIN' },
+  });
+  if (!isDemo) {
+    console.log(`✅ Seed production xong. Super admin: ${superEmail}. Đăng nhập /super để tạo cửa hàng đối tác.`);
+    return;
+  }
+
+  const pwd = await bcrypt.hash('123456', 10);
+  // Cửa hàng 1: đầy đủ sản phẩm
+  const s1 = await prisma.store.create({
+    data: { slug: 'tap-hoa-xanh', name: 'Tạp Hoá Xanh', phone: '1900 1234', address: '123 Lê Lợi, Quận 1, TP. Hồ Chí Minh', planId: pro.id, planExpiresAt: monthsFromNow(12) },
+  });
+  // Cửa hàng 2: ít sản phẩm, giá khác, gói cơ bản
+  const s2 = await prisma.store.create({
+    data: { slug: 'tap-hoa-ba-nam', name: 'Tạp Hoá Bà Năm', phone: '0908 555 666', address: '45 Nguyễn Trãi, Quận 5, TP. Hồ Chí Minh', planId: basic.id, planExpiresAt: monthsFromNow(1) },
+  });
+  for (const [s, plan, months] of [[s1, pro, 12], [s2, basic, 1]] as const)
+    await prisma.storePayment.create({
+      data: { storeId: s.id, planId: plan.id, months, amount: plan.priceMonthly * months, periodFrom: new Date(), periodTo: s.planExpiresAt!, method: 'Chuyển khoản', note: 'Đăng ký ban đầu', createdById: superAdmin.id },
+    });
+
+  await prisma.user.createMany({
+    data: [
+      { email: 'admin@grocery.local', password: pwd, fullName: 'Chủ Tạp Hoá Xanh', role: 'ADMIN', storeId: s1.id },
+      { email: 'staff@grocery.local', password: pwd, fullName: 'Nhân viên Tạp Hoá Xanh', role: 'STAFF', storeId: s1.id },
+      { email: 'owner2@grocery.local', password: pwd, fullName: 'Bà Năm', role: 'ADMIN', storeId: s2.id },
+      { email: 'customer@grocery.local', password: pwd, fullName: 'Nguyễn Văn A', phone: '0901234567', address: '123 Lê Lợi, Q.1, TP.HCM' },
+    ],
+  });
+
+  await seedCatalog(s1.id, products);
+  await seedCatalog(s2.id, products.filter((p) => ['Mì Hảo Hảo', 'Coca-Cola', 'Nước mắm Nam Ngư', 'Bánh quy Cosy Marie', "Snack khoai tây Lay's"].includes(p.name)), 1.05);
+
+  await prisma.setting.createMany({
+    data: [
+      {
+        storeId: s1.id, key: 'store',
+        value: {
+          storeName: s1.name, hotline: s1.phone, address: s1.address, email: 'hotro@taphoaxanh.vn', taxCode: '0312345678',
+          payment: { cod: true, bankTransfer: true, vnpay: true },
+          bank: { bankBin: '970436', bankName: 'Vietcombank', accountNo: '1234567890', accountName: 'CONG TY TAP HOA XANH' },
+        },
+      },
+      {
+        storeId: s2.id, key: 'store',
+        value: {
+          storeName: s2.name, slogan: 'Tạp hoá đầu hẻm – có gì bán nấy', hotline: s2.phone, address: s2.address,
+          announcement: '🛵 Giao trong bán kính 3km · Miễn phí ship đơn từ 150.000₫', freeShippingThreshold: 150000, shippingFee: 15000,
+          payment: { cod: true, bankTransfer: true, vnpay: false },
+          bank: { bankBin: '970422', bankName: 'MB Bank', accountNo: '0908555666', accountName: 'NGUYEN THI NAM' }, banners: [],
+        },
+      },
+    ],
+  });
 
   await prisma.supplier.createMany({
     data: [
-      { name: 'Công ty TNHH Phân phối Hàng tiêu dùng Sài Gòn', contactName: 'Anh Minh', phone: '0281234567', email: 'sales@pptdsg.vn', taxCode: '0301234567', address: '45 Nguyễn Văn Cừ, Q.5, TP.HCM' },
-      { name: 'Nông trại Rau sạch Đà Lạt', contactName: 'Chị Lan', phone: '0909888777', address: 'Phường 7, TP. Đà Lạt, Lâm Đồng' },
+      { storeId: s1.id, name: 'Công ty TNHH Phân phối Hàng tiêu dùng Sài Gòn', contactName: 'Anh Minh', phone: '0281234567', email: 'sales@pptdsg.vn', taxCode: '0301234567', address: '45 Nguyễn Văn Cừ, Q.5, TP.HCM' },
+      { storeId: s1.id, name: 'Nông trại Rau sạch Đà Lạt', contactName: 'Chị Lan', phone: '0909888777', address: 'Phường 7, TP. Đà Lạt, Lâm Đồng' },
+      { storeId: s2.id, name: 'Đại lý Chợ Lớn', contactName: 'Chú Tư', phone: '0283855123', address: 'Chợ Bình Tây, Q.6, TP.HCM' },
     ],
   });
 
   await prisma.coupon.createMany({
     data: [
-      { code: 'WELCOME10', description: 'Giảm 10% tối đa 50k cho đơn từ 100k', type: 'PERCENT', value: 10, minOrderValue: 100000, maxDiscount: 50000 },
-      { code: 'GIAM20K', description: 'Giảm 20k cho đơn từ 200k', type: 'FIXED', value: 20000, minOrderValue: 200000, usageLimit: 100 },
+      { storeId: s1.id, code: 'WELCOME10', description: 'Giảm 10% tối đa 50k cho đơn từ 100k', type: 'PERCENT', value: 10, minOrderValue: 100000, maxDiscount: 50000 },
+      { storeId: s1.id, code: 'GIAM20K', description: 'Giảm 20k cho đơn từ 200k', type: 'FIXED', value: 20000, minOrderValue: 200000, usageLimit: 100 },
+      { storeId: s2.id, code: 'BANAM5K', description: 'Giảm 5k cho đơn từ 50k', type: 'FIXED', value: 5000, minOrderValue: 50000 },
     ],
   });
-  console.log(`✅ Seed xong. Admin: ${adminEmail}${isDemo ? ' / 123456' : ' (mật khẩu theo SEED_ADMIN_PASSWORD)'}`);
+  console.log('✅ Seed xong. Mật khẩu tất cả tài khoản: 123456');
+  console.log('   Super admin: super@grocery.local');
+  console.log('   Tạp Hoá Xanh (/s/tap-hoa-xanh): admin@grocery.local, staff@grocery.local');
+  console.log('   Tạp Hoá Bà Năm (/s/tap-hoa-ba-nam): owner2@grocery.local');
+  console.log('   Khách hàng: customer@grocery.local');
 }
 
 main().catch((e) => { console.error(e); process.exit(1); }).finally(() => prisma.$disconnect());

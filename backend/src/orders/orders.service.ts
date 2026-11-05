@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
+import { isExpired, storeId, tenant } from '../common/tenant';
 import { paged, paginate } from '../common/utils';
 import { CouponsService } from '../coupons/coupons.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -19,6 +20,7 @@ const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 export const orderInclude = {
   items: true,
   user: { select: { id: true, email: true, fullName: true } },
+  store: { select: { id: true, slug: true, name: true } },
   createdBy: { select: { id: true, fullName: true } },
   payments: { orderBy: { createdAt: 'desc' } },
 } satisfies Prisma.OrderInclude;
@@ -56,7 +58,8 @@ export class OrdersService {
     const merged = new Map<number, number>();
     dto.items.forEach((i) => merged.set(i.variantId, (merged.get(i.variantId) ?? 0) + i.quantity));
     const variants = await tx.productVariant.findMany({
-      where: { id: { in: [...merged.keys()] } },
+      // chỉ biến thể của cửa hàng đang mua → không thể đặt hàng chéo cửa hàng
+      where: { id: { in: [...merged.keys()] }, storeId: storeId() },
       include: { product: { select: { id: true, name: true, slug: true, thumbnail: true, unit: true, isActive: true } } },
     });
     const lines: Line[] = [...merged.entries()].map(([variantId, quantity]) => {
@@ -105,6 +108,8 @@ export class OrdersService {
   }
 
   async create(dto: CreateOrderDto, userId: number) {
+    const st = tenant().store;
+    if (st && isExpired(st)) throw new ForbiddenException('Cửa hàng tạm ngưng nhận đơn online, vui lòng quay lại sau');
     const s = await this.settings.getPublic();
     const method = dto.paymentMethod ?? 'COD';
     const enabled = { COD: s.payment.cod, BANK_TRANSFER: s.payment.bankTransfer, VNPAY: s.payment.vnpay }[method];
@@ -130,7 +135,7 @@ export class OrdersService {
       if (calc.couponId) await tx.coupon.update({ where: { id: calc.couponId }, data: { usedCount: { increment: 1 } } });
       return tx.order.create({
         data: {
-          code, userId, channel: 'ONLINE',
+          code, userId, channel: 'ONLINE', storeId: storeId(),
           customerName: dto.customerName, phone: dto.phone, address: dto.address, note: dto.note,
           paymentMethod: method, deliveryDate, deliverySlot: dto.deliverySlot,
           subtotal: calc.subtotal, discount: calc.discount, shippingFee: calc.shippingFee, total: calc.total,
@@ -140,7 +145,7 @@ export class OrdersService {
         include: orderInclude,
       });
     });
-    this.safeNotify(() => this.notifications.notifyStaff({
+    this.safeNotify(() => this.notifications.notifyStaff(order.storeId, {
       type: 'NEW_ORDER', title: `🛒 Đơn hàng mới ${order.code}`,
       body: `${order.customerName} · ${order.total.toLocaleString('vi-VN')}₫ · ${order.items.length} sản phẩm`,
       data: { orderId: order.id, url: `/admin/orders/${order.id}` },
@@ -165,7 +170,7 @@ export class OrdersService {
       const now = new Date();
       return tx.order.create({
         data: {
-          code, channel: 'POS', createdById: staffId,
+          code, channel: 'POS', createdById: staffId, storeId: storeId(),
           customerName: dto.customerName?.trim() || 'Khách lẻ', phone: dto.phone?.trim() || '', address: 'Mua tại cửa hàng',
           note: dto.note, status: 'COMPLETED', paymentMethod: dto.paymentMethod, paymentStatus: 'PAID', paidAt: now,
           cashReceived: dto.paymentMethod === 'CASH' ? dto.cashReceived ?? total : null,
@@ -204,25 +209,30 @@ export class OrdersService {
     const [items, total] = await Promise.all([
       this.prisma.order.findMany({
         where, skip, take, orderBy: { createdAt: 'desc' },
-        include: { _count: { select: { items: true } }, user: { select: { id: true, email: true } }, items: { take: 3, select: { image: true, productName: true } } },
+        include: {
+          _count: { select: { items: true } }, user: { select: { id: true, email: true } },
+          store: { select: { id: true, slug: true, name: true } }, items: { take: 3, select: { image: true, productName: true } },
+        },
       }),
       this.prisma.order.count({ where }),
     ]);
     return paged(items, total, page, limit);
   }
 
+  /** Khách: đơn của mình ở mọi cửa hàng */
   listMine(userId: number, q: QueryOrdersDto) {
     return this.listWhere(q, { userId });
   }
 
+  /** Cửa hàng: chỉ đơn của cửa hàng hiện tại */
   listAll(q: QueryOrdersDto) {
-    return this.listWhere(q);
+    return this.listWhere(q, { storeId: storeId() });
   }
 
   /** Xuất CSV (UTF-8 BOM để Excel đọc đúng tiếng Việt) */
   async exportCsv(q: QueryOrdersDto) {
     const rows = await this.prisma.order.findMany({
-      where: this.buildWhere(q), orderBy: { createdAt: 'desc' }, take: 10000,
+      where: this.buildWhere(q, { storeId: storeId() }), orderBy: { createdAt: 'desc' }, take: 10000,
       include: { items: true },
     });
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -237,16 +247,19 @@ export class OrdersService {
     return '﻿' + [header.map(esc).join(','), ...lines].join('\r\n');
   }
 
+  /** userId → khách xem đơn của mình; không có userId → nhân viên xem đơn của cửa hàng mình */
   async findOne(id: number, userId?: number) {
     const order = await this.prisma.order.findUnique({ where: { id }, include: orderInclude });
     if (!order) throw new NotFoundException('Không tìm thấy đơn hàng');
-    if (userId !== undefined && order.userId !== userId) throw new ForbiddenException();
+    if (userId !== undefined ? order.userId !== userId : order.storeId !== storeId()) throw new NotFoundException('Không tìm thấy đơn hàng');
     return order;
   }
 
-  async updateStatus(id: number, status: OrderStatus, actorId: number, cancelReason?: string) {
+  /** checkStore=false chỉ dùng khi khách tự huỷ đơn của mình (đã kiểm tra quyền sở hữu) */
+  async updateStatus(id: number, status: OrderStatus, actorId: number, cancelReason?: string, checkStore = true) {
     const updated = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUniqueOrThrow({ where: { id }, include: { items: true } });
+      if (checkStore && order.storeId !== storeId()) throw new NotFoundException('Không tìm thấy đơn hàng');
       if (!TRANSITIONS[order.status].includes(status))
         throw new BadRequestException(`Không thể chuyển trạng thái từ ${order.status} sang ${status}`);
 
@@ -266,7 +279,7 @@ export class OrdersService {
             });
         }
         if (order.couponCode)
-          await tx.coupon.updateMany({ where: { code: order.couponCode, usedCount: { gt: 0 } }, data: { usedCount: { decrement: 1 } } });
+          await tx.coupon.updateMany({ where: { storeId: order.storeId, code: order.couponCode, usedCount: { gt: 0 } }, data: { usedCount: { decrement: 1 } } });
       }
       if (status === 'COMPLETED') {
         if (order.paymentStatus !== 'PAID') {
@@ -298,11 +311,11 @@ export class OrdersService {
     const order = await this.findOne(id, userId);
     if (order.status !== 'PENDING') throw new BadRequestException('Chỉ có thể huỷ đơn đang chờ xác nhận');
     if (order.paymentStatus === 'PAID') throw new BadRequestException('Đơn đã thanh toán, vui lòng liên hệ cửa hàng để huỷ');
-    return this.updateStatus(id, 'CANCELLED', userId, reason || 'Khách hàng huỷ');
+    return this.updateStatus(id, 'CANCELLED', userId, reason || 'Khách hàng huỷ', false);
   }
 
   async updatePayment(id: number, paymentStatus: PaymentStatus) {
-    const order = await this.prisma.order.findUniqueOrThrow({ where: { id } });
+    const order = await this.prisma.order.findFirstOrThrow({ where: { id, storeId: storeId() } });
     const updated = await this.prisma.$transaction(async (tx) => {
       if (paymentStatus === 'PAID' && order.paymentStatus !== 'PAID')
         await tx.paymentTransaction.create({

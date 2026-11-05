@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Coupon, Prisma } from '@prisma/client';
+import { storeId } from '../common/tenant';
 import { PrismaService } from '../prisma/prisma.service';
 import { SaveCouponDto } from './coupons.dto';
 
@@ -8,7 +9,7 @@ export class CouponsService {
   constructor(private prisma: PrismaService) {}
 
   list() {
-    return this.prisma.coupon.findMany({ orderBy: { createdAt: 'desc' } });
+    return this.prisma.coupon.findMany({ where: { storeId: storeId() }, orderBy: { createdAt: 'desc' } });
   }
 
   private normalize(dto: SaveCouponDto) {
@@ -17,14 +18,16 @@ export class CouponsService {
   }
 
   create(dto: SaveCouponDto) {
-    return this.prisma.coupon.create({ data: this.normalize(dto) });
+    return this.prisma.coupon.create({ data: { ...this.normalize(dto), storeId: storeId() } });
   }
 
-  update(id: number, dto: SaveCouponDto) {
+  async update(id: number, dto: SaveCouponDto) {
+    await this.prisma.coupon.findFirstOrThrow({ where: { id, storeId: storeId() } });
     return this.prisma.coupon.update({ where: { id }, data: this.normalize(dto) });
   }
 
-  remove(id: number) {
+  async remove(id: number) {
+    await this.prisma.coupon.findFirstOrThrow({ where: { id, storeId: storeId() } });
     return this.prisma.coupon.delete({ where: { id } });
   }
 
@@ -36,7 +39,7 @@ export class CouponsService {
 
   /** Kiểm tra mã & trả về số tiền giảm. Có thể chạy trong transaction */
   async apply(code: string, subtotal: number, tx: Prisma.TransactionClient = this.prisma) {
-    const c = await tx.coupon.findUnique({ where: { code: code.trim().toUpperCase() } });
+    const c = await tx.coupon.findUnique({ where: { storeId_code: { storeId: storeId(), code: code.trim().toUpperCase() } } });
     const now = new Date();
     if (!c || !c.isActive) throw new BadRequestException('Mã giảm giá không tồn tại hoặc đã ngừng');
     if (c.startsAt && c.startsAt > now) throw new BadRequestException('Mã giảm giá chưa đến thời gian áp dụng');

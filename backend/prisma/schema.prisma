@@ -11,9 +11,16 @@ datasource db {
 }
 
 enum Role {
-  ADMIN
-  STAFF
-  CUSTOMER
+  SUPER_ADMIN // quản trị nền tảng
+  ADMIN // chủ / quản lý cửa hàng
+  STAFF // nhân viên cửa hàng
+  CUSTOMER // khách hàng (dùng chung toàn nền tảng)
+}
+
+enum StoreStatus {
+  ACTIVE
+  SUSPENDED // tạm khoá
+  CLOSED // ngừng hợp tác
 }
 
 enum OrderStatus {
@@ -82,6 +89,9 @@ model User {
   phone          String?
   address        String?   @db.Text
   role           Role      @default(CUSTOMER)
+  /// Cửa hàng của ADMIN/STAFF; khách hàng & super admin: null
+  storeId        Int?
+  store          Store?    @relation("StoreMembers", fields: [storeId], references: [id], onDelete: SetNull)
   isActive       Boolean   @default(true)
   resetTokenHash String?
   resetTokenExp  DateTime?
@@ -98,12 +108,17 @@ model User {
   addresses     Address[]
   docsCreated   StockDocument[] @relation("DocCreatedBy")
   docsCompleted StockDocument[] @relation("DocCompletedBy")
+  storePayments StorePayment[]
+
+  @@index([storeId])
 }
 
 model Category {
   id          Int        @id @default(autoincrement())
   name        String
-  slug        String     @unique
+  slug        String
+  storeId     Int
+  store       Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
   description String?    @db.Text
   image       String?    @db.VarChar(1000)
   sortOrder   Int        @default(0)
@@ -114,12 +129,16 @@ model Category {
   products    Product[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+
+  @@unique([storeId, slug])
 }
 
 model Product {
   id          Int       @id @default(autoincrement())
   name        String
-  slug        String    @unique
+  slug        String
+  storeId     Int
+  store       Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   description String?   @db.Text
   brand       String?
   unit        String? // đơn vị tính: gói, chai, hộp, kg...
@@ -144,6 +163,7 @@ model Product {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([storeId, slug])
   @@index([categoryId])
   @@index([isActive, isFeatured])
 }
@@ -172,7 +192,10 @@ model ProductVariant {
   id                Int     @id @default(autoincrement())
   productId         Int
   product           Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  sku               String  @unique
+  sku               String
+  /// trùng với product.storeId – để SKU / mã vạch là duy nhất trong từng cửa hàng
+  storeId           Int
+  store             Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
   barcode           String?
   name              String // "1kg / Cay" – tự sinh từ option values
   price             Int
@@ -192,8 +215,10 @@ model ProductVariant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([storeId, sku])
   @@index([productId])
   @@index([barcode])
+  @@index([storeId, barcode])
 }
 
 model VariantOptionValue {
@@ -208,6 +233,8 @@ model VariantOptionValue {
 model Order {
   id            Int                  @id @default(autoincrement())
   code          String               @unique
+  storeId       Int
+  store         Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
   userId        Int?
   user          User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdById   Int? // nhân viên tạo đơn (POS)
@@ -238,6 +265,7 @@ model Order {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([storeId, createdAt])
 }
 
 model OrderItem {
@@ -259,7 +287,9 @@ model OrderItem {
 
 model Coupon {
   id            Int          @id @default(autoincrement())
-  code          String       @unique
+  code          String
+  storeId       Int
+  store         Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
   description   String?      @db.Text
   type          DiscountType @default(PERCENT)
   value         Int
@@ -272,6 +302,8 @@ model Coupon {
   isActive      Boolean      @default(true)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+  @@unique([storeId, code])
 }
 
 model InventoryLog {
@@ -311,11 +343,15 @@ model PaymentTransaction {
   @@index([orderId])
 }
 
-/// Cấu hình cửa hàng dạng key-value (key "store" chứa toàn bộ cài đặt)
+/// Cấu hình từng cửa hàng dạng key-value (key "store" chứa toàn bộ cài đặt)
 model Setting {
-  key       String   @id
+  storeId   Int
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  key       String
   value     Json
   updatedAt DateTime @updatedAt
+
+  @@id([storeId, key])
 }
 
 model Review {
@@ -361,6 +397,8 @@ model Address {
 model Supplier {
   id          Int             @id @default(autoincrement())
   name        String
+  storeId     Int
+  store       Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
   contactName String?
   phone       String?
   email       String?
@@ -371,12 +409,16 @@ model Supplier {
   documents   StockDocument[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+
+  @@index([storeId])
 }
 
 /// Phiếu kho: nhập (PN), xuất (PX), kiểm kê (KK)
 model StockDocument {
   id            Int                 @id @default(autoincrement())
-  code          String              @unique
+  code          String
+  storeId       Int
+  store         Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
   type          StockDocType
   status        StockDocStatus      @default(DRAFT)
   supplierId    Int?
@@ -398,6 +440,7 @@ model StockDocument {
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
+  @@unique([storeId, code])
   @@index([type, status])
 }
 
@@ -443,4 +486,72 @@ model PushToken {
   platform  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Gói dịch vụ dành cho đối tác
+model Plan {
+  id           Int            @id @default(autoincrement())
+  code         String         @unique
+  name         String
+  description  String?        @db.Text
+  priceMonthly Int            @default(0)
+  /// null = không giới hạn
+  maxProducts  Int?
+  maxStaff     Int?
+  isActive     Boolean        @default(true)
+  sortOrder    Int            @default(0)
+  stores       Store[]
+  payments     StorePayment[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+/// Cửa hàng (đối tác) trên nền tảng
+model Store {
+  id            Int         @id @default(autoincrement())
+  slug          String      @unique
+  name          String
+  phone         String?
+  email         String?
+  address       String?     @db.Text
+  logo          String?     @db.VarChar(1000)
+  status        StoreStatus @default(ACTIVE)
+  planId        Int?
+  plan          Plan?       @relation(fields: [planId], references: [id], onDelete: SetNull)
+  /// null = không thời hạn
+  planExpiresAt DateTime?
+  note          String?     @db.Text
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  members        User[]           @relation("StoreMembers")
+  categories     Category[]
+  products       Product[]
+  variants       ProductVariant[]
+  orders         Order[]
+  coupons        Coupon[]
+  settings       Setting[]
+  suppliers      Supplier[]
+  stockDocuments StockDocument[]
+  payments       StorePayment[]
+}
+
+/// Lịch sử gia hạn / thanh toán gói của đối tác
+model StorePayment {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  planId      Int?
+  plan        Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
+  months      Int
+  amount      Int
+  periodFrom  DateTime
+  periodTo    DateTime
+  method      String? // tiền mặt, chuyển khoản…
+  note        String?  @db.Text
+  createdById Int?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([storeId])
 }

@@ -37,6 +37,14 @@ export default function MobilePos() {
   const [customer, setCustomer] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<Order | null>(null);
+  const [quick, setQuick] = useState<SV[]>([]);
+  const [cats, setCats] = useState<{ id: number; name: string }[]>([]);
+  const [cat, setCat] = useState<number | null>(null);
+  const [showQuick, setShowQuick] = useState(true);
+  useEffect(() => {
+    api<SV[]>('/admin/stock/variants?sellable=1&limit=1000').then(setQuick).catch(() => {});
+    api<{ id: number; name: string }[]>('/categories').then(setCats).catch(() => {});
+  }, []);
   const linesRef = useRef(lines);
   linesRef.current = lines;
 
@@ -87,7 +95,26 @@ export default function MobilePos() {
         <Row gap={6}><T variant="muted">SL mỗi lần quét:</T>{[1, 2, 3, 5, 10].map((n) => <Chip key={n} label={`×${n}`} active={mult === n} onPress={() => setMult(n)} />)}</Row>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: 160 + insets.bottom }}>
-        {!lines.length && <Empty icon="scan-outline" text="Bấm nút quét để bắt đầu bán hàng"><Button testID="start-scan" title="Mở camera quét" icon="scan-outline" onPress={() => setScan(true)} /></Empty>}
+        <Pressable onPress={() => setShowQuick(!showQuick)}><Row style={{ justifyContent: 'space-between' }}><T variant="h3">Chọn nhanh ({quick.length})</T><Ionicons name={showQuick ? 'chevron-up' : 'chevron-down'} size={20} color={C.muted} /></Row></Pressable>
+        {showQuick && (
+          <View style={{ gap: 8 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              <Chip label="Tất cả" active={cat === null} onPress={() => setCat(null)} />
+              {cats.map((c) => <Chip key={c.id} label={c.name} active={cat === c.id} onPress={() => setCat(c.id)} />)}
+            </ScrollView>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {quick.filter((v) => cat === null || (v.product as any).categoryId === cat).map((v) => (
+                <Pressable key={v.id} disabled={v.stock <= 0} onPress={() => add(v, mult)} style={({ pressed }) => [{ width: 118, backgroundColor: C.white, borderRadius: R.md, padding: 8, borderWidth: 1, borderColor: C.line, opacity: v.stock <= 0 ? 0.4 : 1 }, pressed && { borderColor: C.brand600 }]}>
+                  <Image source={{ uri: v.image || v.product.thumbnail || undefined }} style={{ width: '100%', height: 64, borderRadius: 8, backgroundColor: C.line2 }} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: C.ink, marginTop: 4 }} numberOfLines={1}>{v.product.name}</Text>
+                  <Text style={{ fontSize: 11, color: C.muted }} numberOfLines={1}>{v.name}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: C.brand700 }}>{money(v.price)} <Text style={{ color: C.faint, fontWeight: '400' }}>· {v.stock}</Text></Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+        {!lines.length && <Empty icon="scan-outline" text="Quét mã hoặc chọn nhanh để bắt đầu bán hàng"><Button testID="start-scan" title="Mở camera quét" icon="scan-outline" onPress={() => setScan(true)} /></Empty>}
         {lines.map((l) => (
           <Card key={l.v.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10 }}>
             <Image source={{ uri: l.v.image || l.v.product.thumbnail || undefined }} style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: C.line2 }} />

@@ -21,6 +21,8 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { WishlistModule } from './wishlist/wishlist.module';
 import { AddressesModule } from './addresses/addresses.module';
 import { StockModule } from './stock/stock.module';
+import { SuperModule } from './super/super.module';
+import { StoresModule } from './stores/stores.module';
 
 @Module({
   imports: [
@@ -45,6 +47,8 @@ import { StockModule } from './stock/stock.module';
     WishlistModule,
     AddressesModule,
     StockModule,
+    SuperModule,
+    StoresModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

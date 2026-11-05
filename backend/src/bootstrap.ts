@@ -6,6 +6,8 @@ import helmet from 'helmet';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/prisma-exception.filter';
+import { tenantMiddleware } from './common/tenant.middleware';
+import { PrismaService } from './prisma/prisma.service';
 
 /**
  * CORS_ORIGIN: danh sách phân cách bởi dấu phẩy, hỗ trợ wildcard "*"
@@ -30,6 +32,8 @@ export async function createApp() {
   // Header bảo mật (cho phép frontend khác domain tải ảnh /uploads; tắt CSP vì đây là API JSON + Swagger UI)
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' }, contentSecurityPolicy: false }));
   app.set('trust proxy', 1);
+  // Ngữ cảnh cửa hàng cho từng request (X-Store: slug)
+  app.use(tenantMiddleware(app.get(PrismaService)));
   app.enableCors({ origin: corsMatcher(), credentials: true });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, transformOptions: { enableImplicitConversion: true } }),
@@ -44,6 +48,10 @@ export async function createApp() {
       .setDescription('API cho web cửa hàng, trang quản trị và app điện thoại. Bấm "Authorize" và dán accessToken từ /api/auth/login.')
       .setVersion('2.0')
       .addBearerAuth()
+      .addGlobalParameters(
+        { in: 'header', name: 'X-Store', required: false, description: 'Slug cửa hàng (API storefront: sản phẩm, đặt hàng…)', schema: { type: 'string' } },
+        { in: 'header', name: 'X-Store-Id', required: false, description: 'Super admin: id cửa hàng đang quản trị hộ', schema: { type: 'string' } },
+      )
       .build(),
   );
   SwaggerModule.setup('api/docs', app, doc, { swaggerOptions: { persistAuthorization: true } });

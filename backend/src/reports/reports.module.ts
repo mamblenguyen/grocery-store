@@ -1,6 +1,7 @@
 import { Controller, Get, Injectable, Module, Query } from '@nestjs/common';
 import { IsDateString, IsIn, IsOptional } from 'class-validator';
 import { AdminOnly } from '../common/decorators';
+import { storeId } from '../common/tenant';
 import { PrismaService } from '../prisma/prisma.service';
 
 class ReportQuery {
@@ -26,7 +27,7 @@ export class ReportsService {
     const from = q.from ? new Date(q.from + 'T00:00:00') : new Date(to.getFullYear(), to.getMonth(), 1);
     const groupBy = q.groupBy ?? (to.getTime() - from.getTime() > 62 * 86400000 ? 'month' : 'day');
     const orders = await this.prisma.order.findMany({
-      where: { status: 'COMPLETED', createdAt: { gte: from, lte: to } },
+      where: { storeId: storeId(), status: 'COMPLETED', createdAt: { gte: from, lte: to } },
       include: { items: true },
       orderBy: { createdAt: 'asc' },
     });

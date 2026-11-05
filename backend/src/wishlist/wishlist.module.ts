@@ -10,12 +10,13 @@ export class WishlistController {
 
   @Get() async list(@CurrentUser('sub') userId: number) {
     const rows = await this.prisma.wishlistItem.findMany({
-      where: { userId, product: { isActive: true } },
+      where: { userId, product: { isActive: true, store: { status: 'ACTIVE' } } },
       orderBy: { createdAt: 'desc' },
       include: {
         product: {
           include: {
             category: { select: { id: true, name: true, slug: true } },
+            store: { select: { id: true, slug: true, name: true } },
             variants: { where: { isActive: true }, orderBy: { position: 'asc' } },
           },
         },

@@ -6,6 +6,7 @@ import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } fro
 import { AdminOnly, Auth, CurrentUser } from '../common/decorators';
 import { PaginationDto } from '../common/pagination.dto';
 import { paged, paginate } from '../common/utils';
+import { storeId } from '../common/tenant';
 import { PrismaService } from '../prisma/prisma.service';
 
 class ReviewDto {
@@ -74,9 +75,10 @@ export class ReviewsService {
   async adminList(q: QueryReviewsDto) {
     const { skip, take, page, limit } = paginate(q.page, q.limit);
     const where: Prisma.ReviewWhereInput = {
+      product: { storeId: storeId() },
       ...(q.rating && { rating: q.rating }),
       ...(q.status && { isVisible: q.status === 'visible' }),
-      ...(q.search && { OR: [{ comment: { contains: q.search } }, { product: { name: { contains: q.search } } }, { user: { fullName: { contains: q.search } } }] }),
+      ...(q.search && { OR: [{ comment: { contains: q.search } }, { product: { name: { contains: q.search }, storeId: storeId() } }, { user: { fullName: { contains: q.search } } }] }),
     };
     const [items, total] = await Promise.all([
       this.prisma.review.findMany({
@@ -89,6 +91,7 @@ export class ReviewsService {
   }
 
   async setVisible(id: number, isVisible: boolean) {
+    await this.prisma.review.findFirstOrThrow({ where: { id, product: { storeId: storeId() } } });
     return this.prisma.$transaction(async (tx) => {
       const r = await tx.review.update({ where: { id }, data: { isVisible } });
       await this.recompute(r.productId, tx);
@@ -97,6 +100,7 @@ export class ReviewsService {
   }
 
   async remove(id: number) {
+    await this.prisma.review.findFirstOrThrow({ where: { id, product: { storeId: storeId() } } });
     return this.prisma.$transaction(async (tx) => {
       const r = await tx.review.delete({ where: { id } });
       await this.recompute(r.productId, tx);

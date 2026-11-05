@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { paged, paginate, slugify } from '../common/utils';
+import { assertPlanLimit } from '../common/plan-limits';
+import { storeId } from '../common/tenant';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueryProductsDto, SaveProductDto } from './dto/product.dto';
 
@@ -50,7 +52,7 @@ export class ProductsService {
   }
 
   private async buildWhere(q: QueryProductsDto, admin: boolean): Promise<Prisma.ProductWhereInput> {
-    const where: Prisma.ProductWhereInput = {};
+    const where: Prisma.ProductWhereInput = { storeId: storeId() };
     if (!admin) where.isActive = true;
     else if (q.status === 'active') where.isActive = true;
     else if (q.status === 'inactive') where.isActive = false;
@@ -64,8 +66,8 @@ export class ProductsService {
     }
     if (q.category || q.categoryId) {
       const cat = q.categoryId
-        ? await this.prisma.category.findUnique({ where: { id: q.categoryId }, include: { children: true } })
-        : await this.prisma.category.findUnique({ where: { slug: q.category! }, include: { children: true } });
+        ? await this.prisma.category.findFirst({ where: { id: q.categoryId, storeId: storeId() }, include: { children: true } })
+        : await this.prisma.category.findUnique({ where: { storeId_slug: { storeId: storeId(), slug: q.category! } }, include: { children: true } });
       where.categoryId = { in: cat ? [cat.id, ...cat.children.map((c) => c.id)] : [-1] };
     }
     if (q.brand) where.brand = { equals: q.brand };
@@ -110,26 +112,26 @@ export class ProductsService {
 
   async brands() {
     const rows = await this.prisma.product.findMany({
-      where: { isActive: true, brand: { not: null } }, distinct: ['brand'], select: { brand: true }, orderBy: { brand: 'asc' },
+      where: { storeId: storeId(), isActive: true, brand: { not: null } }, distinct: ['brand'], select: { brand: true }, orderBy: { brand: 'asc' },
     });
     return rows.map((r) => r.brand);
   }
 
   async findBySlug(slug: string) {
     const p = await this.prisma.product.findFirst({
-      where: { slug, isActive: true },
+      where: { storeId: storeId(), slug, isActive: true },
       include: { ...detailInclude, variants: { ...detailInclude.variants, where: { isActive: true } } },
     });
     if (!p) throw new NotFoundException('Không tìm thấy sản phẩm');
     const related = await this.prisma.product.findMany({
-      where: { isActive: true, categoryId: p.categoryId, id: { not: p.id } },
+      where: { storeId: p.storeId, isActive: true, categoryId: p.categoryId, id: { not: p.id } },
       take: 8, orderBy: { soldCount: 'desc' }, include: listInclude,
     });
     return { ...this.format(p), related: related.map((r) => ({ ...r, images: toImages(r.images) })) };
   }
 
   async findById(id: number) {
-    const p = await this.prisma.product.findUnique({ where: { id }, include: detailInclude });
+    const p = await this.prisma.product.findFirst({ where: { id, storeId: storeId() }, include: detailInclude });
     if (!p) throw new NotFoundException('Không tìm thấy sản phẩm');
     return this.format(p);
   }
@@ -163,6 +165,10 @@ export class ProductsService {
 
   async save(dto: SaveProductDto, userId: number, id?: number) {
     this.validate(dto);
+    const sid = storeId();
+    if (id) await this.prisma.product.findFirstOrThrow({ where: { id, storeId: sid } }); // chỉ sửa sản phẩm của cửa hàng mình
+    else await assertPlanLimit(this.prisma, sid, 'products');
+    if (dto.categoryId) await this.prisma.category.findFirstOrThrow({ where: { id: dto.categoryId, storeId: sid } });
     const slug = slugify(dto.slug || dto.name);
     const { options, variants, images, ...rest } = dto;
     const productData = { ...rest, ...(images !== undefined && { images }) };
@@ -172,7 +178,7 @@ export class ProductsService {
       const data = { ...productData, slug, minPrice: Math.min(...prices), maxPrice: Math.max(...prices) };
       const product = id
         ? await tx.product.update({ where: { id }, data })
-        : await tx.product.create({ data });
+        : await tx.product.create({ data: { ...data, storeId: sid } });
 
       // 1. Tạo lại options & values (xoá cũ -> cascade xoá bảng nối)
       await tx.productOption.deleteMany({ where: { productId: product.id } });
@@ -205,7 +211,7 @@ export class ProductsService {
               data: { ...vData, name, position: i, optionValues: { create: optionLinks } },
             })
           : await tx.productVariant.create({
-              data: { ...vData, name, position: i, productId: product.id, optionValues: { create: optionLinks } },
+              data: { ...vData, name, position: i, productId: product.id, storeId: sid, optionValues: { create: optionLinks } },
             });
         const change = saved.stock - (old?.stock ?? 0);
         if (change !== 0) {
@@ -223,11 +229,12 @@ export class ProductsService {
   }
 
   async toggle(id: number, field: 'isActive' | 'isFeatured') {
-    const p = await this.prisma.product.findUniqueOrThrow({ where: { id } });
+    const p = await this.prisma.product.findFirstOrThrow({ where: { id, storeId: storeId() } });
     return this.prisma.product.update({ where: { id }, data: { [field]: !p[field] } });
   }
 
-  remove(id: number) {
+  async remove(id: number) {
+    await this.prisma.product.findFirstOrThrow({ where: { id, storeId: storeId() } });
     return this.prisma.product.delete({ where: { id } });
   }
 }

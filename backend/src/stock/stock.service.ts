@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, StockDocType } from '@prisma/client';
+import { storeId } from '../common/tenant';
 import { paged, paginate } from '../common/utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueryStockDocsDto, SaveStockDocDto, SupplierDto } from './stock.dto';
@@ -40,7 +41,7 @@ export class StockService {
     const m = code.match(/(?:^SKU:|[?&]sku=)([^&\s]+)/i);
     if (m) code = decodeURIComponent(m[1]);
     const v = await this.prisma.productVariant.findFirst({
-      where: { OR: [{ barcode: code }, { sku: code }] },
+      where: { storeId: storeId(), OR: [{ barcode: code }, { sku: code }] },
       include: { product: { select: { id: true, name: true, unit: true, thumbnail: true, isActive: true } } },
     });
     if (!v) throw new NotFoundException(`Không tìm thấy sản phẩm có mã "${code}"`);
@@ -48,14 +49,23 @@ export class StockService {
   }
 
   /** Tìm biến thể để thêm vào phiếu / POS */
-  searchVariants(search: string, limit = 20) {
+  /**
+   * Tìm biến thể cho POS / phiếu kho.
+   * - search rỗng → trả toàn bộ (tối đa `limit`), dùng cho lưới "Chọn nhanh" của POS
+   * - sellable → chỉ biến thể & sản phẩm đang bán
+   */
+  searchVariants(search: string, opts: { limit?: number; categoryId?: number; sellable?: boolean } = {}) {
+    const where: Prisma.ProductVariantWhereInput = {
+      storeId: storeId(),
+      ...(search && { OR: [{ sku: { contains: search } }, { barcode: search }, { name: { contains: search } }, { product: { name: { contains: search } } }] }),
+      ...(opts.sellable && { isActive: true, product: { isActive: true } }),
+      ...(opts.categoryId && { product: { categoryId: opts.categoryId, ...(opts.sellable && { isActive: true }) } }),
+    };
     return this.prisma.productVariant.findMany({
-      where: search
-        ? { OR: [{ sku: { contains: search } }, { barcode: search }, { name: { contains: search } }, { product: { name: { contains: search } } }] }
-        : {},
-      take: limit,
+      where,
+      take: Math.min(1000, Math.max(1, opts.limit ?? 20)),
       orderBy: [{ product: { name: 'asc' } }, { position: 'asc' }],
-      include: { product: { select: { id: true, name: true, unit: true, thumbnail: true, isActive: true } } },
+      include: { product: { select: { id: true, name: true, unit: true, thumbnail: true, isActive: true, categoryId: true } } },
     });
   }
 
@@ -63,7 +73,7 @@ export class StockService {
   async expiring(days = 30) {
     const until = new Date(Date.now() + days * 86400000);
     const items = await this.prisma.stockDocumentItem.findMany({
-      where: { expiryDate: { not: null, lte: until }, document: { type: 'IMPORT', status: 'COMPLETED' }, variant: { stock: { gt: 0 } } },
+      where: { expiryDate: { not: null, lte: until }, document: { storeId: storeId(), type: 'IMPORT', status: 'COMPLETED' }, variant: { stock: { gt: 0 } } },
       orderBy: { expiryDate: 'asc' },
       take: 200,
       include: {
@@ -77,7 +87,7 @@ export class StockService {
 
   byIds(ids: number[]) {
     return this.prisma.productVariant.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, storeId: storeId() },
       include: { product: { select: { id: true, name: true, unit: true, thumbnail: true, isActive: true } } },
     });
   }
@@ -85,9 +95,9 @@ export class StockService {
   async summary() {
     const threshold = this.prisma.productVariant.fields.lowStockThreshold;
     const [variants, low, out] = await Promise.all([
-      this.prisma.productVariant.findMany({ select: { stock: true, costPrice: true, price: true } }),
-      this.prisma.productVariant.count({ where: { isActive: true, stock: { gt: 0, lte: threshold } } }),
-      this.prisma.productVariant.count({ where: { isActive: true, stock: { lte: 0 } } }),
+      this.prisma.productVariant.findMany({ where: { storeId: storeId() }, select: { stock: true, costPrice: true, price: true } }),
+      this.prisma.productVariant.count({ where: { storeId: storeId(), isActive: true, stock: { gt: 0, lte: threshold } } }),
+      this.prisma.productVariant.count({ where: { storeId: storeId(), isActive: true, stock: { lte: 0 } } }),
     ]);
     return {
       skus: variants.length,
@@ -102,17 +112,20 @@ export class StockService {
   // ───────────────────────── Nhà cung cấp ─────────────────────────
   suppliers(search?: string) {
     return this.prisma.supplier.findMany({
-      where: search ? { OR: [{ name: { contains: search } }, { phone: { contains: search } }, { taxCode: { contains: search } }] } : {},
+      where: { storeId: storeId(), ...(search && { OR: [{ name: { contains: search } }, { phone: { contains: search } }, { taxCode: { contains: search } }] }) },
       orderBy: { name: 'asc' },
       include: { _count: { select: { documents: true } } },
     });
   }
 
-  saveSupplier(dto: SupplierDto, id?: number) {
-    return id ? this.prisma.supplier.update({ where: { id }, data: dto }) : this.prisma.supplier.create({ data: dto });
+  async saveSupplier(dto: SupplierDto, id?: number) {
+    if (!id) return this.prisma.supplier.create({ data: { ...dto, storeId: storeId() } });
+    await this.prisma.supplier.findFirstOrThrow({ where: { id, storeId: storeId() } });
+    return this.prisma.supplier.update({ where: { id }, data: dto });
   }
 
   async removeSupplier(id: number) {
+    await this.prisma.supplier.findFirstOrThrow({ where: { id, storeId: storeId() } });
     const used = await this.prisma.stockDocument.count({ where: { supplierId: id } });
     if (used) return this.prisma.supplier.update({ where: { id }, data: { isActive: false } }); // có chứng từ → chỉ ngừng hoạt động
     return this.prisma.supplier.delete({ where: { id } });
@@ -122,6 +135,7 @@ export class StockService {
   async list(q: QueryStockDocsDto) {
     const { skip, take, page, limit } = paginate(q.page, q.limit);
     const where: Prisma.StockDocumentWhereInput = {
+      storeId: storeId(),
       ...(q.type && { type: q.type }),
       ...(q.status && { status: q.status }),
       ...(q.supplierId && { supplierId: q.supplierId }),
@@ -143,7 +157,7 @@ export class StockService {
   }
 
   async findOne(id: number) {
-    const doc = await this.prisma.stockDocument.findUnique({ where: { id }, include: docInclude });
+    const doc = await this.prisma.stockDocument.findFirst({ where: { id, storeId: storeId() }, include: docInclude });
     if (!doc) throw new NotFoundException('Không tìm thấy phiếu kho');
     return doc;
   }
@@ -152,9 +166,17 @@ export class StockService {
     const d = new Date();
     const ymd = `${d.getFullYear() % 100}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
     const prefix = `${PREFIX[type]}${ymd}-`;
-    const last = await tx.stockDocument.findFirst({ where: { code: { startsWith: prefix } }, orderBy: { code: 'desc' }, select: { code: true } });
+    const last = await tx.stockDocument.findFirst({ where: { storeId: storeId(), code: { startsWith: prefix } }, orderBy: { code: 'desc' }, select: { code: true } });
     const seq = last ? Number(last.code.slice(prefix.length)) + 1 : 1;
     return `${prefix}${String(seq).padStart(3, '0')}`;
+  }
+
+  /** Mọi biến thể & nhà cung cấp trong phiếu phải thuộc cửa hàng hiện tại */
+  private async checkOwnership(dto: SaveStockDocDto) {
+    const ids = [...new Set(dto.items.map((i) => i.variantId))];
+    const n = await this.prisma.productVariant.count({ where: { id: { in: ids }, storeId: storeId() } });
+    if (n !== ids.length) throw new BadRequestException('Phiếu có sản phẩm không thuộc cửa hàng');
+    if (dto.supplierId) await this.prisma.supplier.findFirstOrThrow({ where: { id: dto.supplierId, storeId: storeId() } });
   }
 
   private validate(dto: SaveStockDocDto) {
@@ -179,11 +201,12 @@ export class StockService {
   /** Tạo phiếu (nháp hoặc hoàn tất luôn) */
   async create(dto: SaveStockDocDto, userId: number) {
     this.validate(dto);
+    await this.checkOwnership(dto);
     const id = await this.prisma.$transaction(async (tx) => {
       const items = this.itemsData(dto);
       const doc = await tx.stockDocument.create({
         data: {
-          code: await this.nextCode(tx, dto.type), type: dto.type,
+          code: await this.nextCode(tx, dto.type), type: dto.type, storeId: storeId(),
           supplierId: dto.type === 'STOCKTAKE' ? null : dto.supplierId ?? null,
           reason: dto.type === 'EXPORT' ? dto.reason : null, invoiceNo: dto.invoiceNo, note: dto.note,
           createdById: userId,
@@ -201,6 +224,8 @@ export class StockService {
   /** Sửa phiếu nháp (thay toàn bộ dòng hàng) */
   async update(id: number, dto: SaveStockDocDto, userId: number) {
     this.validate(dto);
+    await this.checkOwnership(dto);
+    await this.findOne(id);
     await this.prisma.$transaction(async (tx) => {
       const doc = await tx.stockDocument.findUniqueOrThrow({ where: { id } });
       if (doc.status !== 'DRAFT') throw new BadRequestException('Chỉ sửa được phiếu nháp');
@@ -223,6 +248,7 @@ export class StockService {
   }
 
   async complete(id: number, userId: number) {
+    await this.findOne(id);
     await this.prisma.$transaction((tx) => this.applyComplete(tx, id, userId));
     return this.findOne(id);
   }
@@ -294,6 +320,7 @@ export class StockService {
 
   /** Huỷ phiếu: nháp → huỷ; đã hoàn tất → đảo ngược tồn kho */
   async cancel(id: number, reason: string, userId: number) {
+    await this.findOne(id);
     await this.prisma.$transaction(async (tx) => {
       const doc = await tx.stockDocument.findUniqueOrThrow({ where: { id }, include: { items: { include: { variant: { include: { product: true } } } } } });
       if (doc.status === 'CANCELLED') throw new BadRequestException('Phiếu đã bị huỷ');
@@ -328,7 +355,7 @@ export class StockService {
   }
 
   async remove(id: number) {
-    const doc = await this.prisma.stockDocument.findUniqueOrThrow({ where: { id } });
+    const doc = await this.findOne(id);
     if (doc.status !== 'DRAFT') throw new BadRequestException('Chỉ xoá được phiếu nháp. Phiếu đã hoàn tất hãy dùng chức năng Huỷ.');
     return this.prisma.stockDocument.delete({ where: { id } });
   }

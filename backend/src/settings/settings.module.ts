@@ -1,6 +1,5 @@
 import { Body, Controller, Get, Global, Module, Put } from '@nestjs/common';
-import { Role } from '@prisma/client';
-import { Auth } from '../common/decorators';
+import { StoreOwner } from '../common/decorators';
 import { SettingsService } from './settings.service';
 import { StoreSettings } from './settings.types';
 
@@ -14,7 +13,7 @@ export class SettingsController {
 }
 
 @Controller('admin/settings')
-@Auth(Role.ADMIN)
+@StoreOwner()
 export class AdminSettingsController {
   constructor(private settings: SettingsService) {}
 

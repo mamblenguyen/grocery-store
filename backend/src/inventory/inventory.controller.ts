@@ -5,6 +5,7 @@ import { AdminOnly, CurrentUser } from '../common/decorators';
 import { PaginationDto } from '../common/pagination.dto';
 import { paged, paginate } from '../common/utils';
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { storeId } from '../common/tenant';
 import { PrismaService } from '../prisma/prisma.service';
 
 export class AdjustStockDto {
@@ -34,6 +35,7 @@ export class InventoryService {
     const where: Prisma.ProductVariantWhereInput = {
       ...(q.filter === 'low' && { stock: { gt: 0, lte: threshold } }),
       ...(q.filter === 'out' && { stock: { lte: 0 } }),
+      storeId: storeId(),
       ...(q.search && {
         OR: [
           { sku: { contains: q.search } },
@@ -61,11 +63,12 @@ export class InventoryService {
   async logs(q: QueryLogsDto) {
     const { skip, take, page, limit } = paginate(q.page, q.limit);
     const where: Prisma.InventoryLogWhereInput = {
+      variant: { storeId: storeId() },
       ...(q.variantId && { variantId: q.variantId }),
       ...(q.reason && { reason: q.reason }),
       ...(q.search && {
         OR: [
-          { variant: { sku: { contains: q.search } } },
+          { variant: { sku: { contains: q.search }, storeId: storeId() } },
           { variant: { product: { name: { contains: q.search } } } },
           { note: { contains: q.search } },
           { document: { code: { contains: q.search } } },
@@ -88,7 +91,7 @@ export class InventoryService {
 
   async adjust(dto: AdjustStockDto, userId: number) {
     return this.prisma.$transaction(async (tx) => {
-      const v = await tx.productVariant.findUniqueOrThrow({ where: { id: dto.variantId } });
+      const v = await tx.productVariant.findFirstOrThrow({ where: { id: dto.variantId, storeId: storeId() } });
       if (v.stock + dto.change < 0) throw new BadRequestException(`Tồn kho hiện tại chỉ có ${v.stock}`);
       const updated = await tx.productVariant.update({ where: { id: v.id }, data: { stock: { increment: dto.change } } });
       await tx.inventoryLog.create({

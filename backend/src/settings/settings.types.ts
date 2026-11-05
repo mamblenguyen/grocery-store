@@ -39,12 +39,12 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   storeName: 'Tạp Hoá Xanh',
   slogan: 'Đi chợ online – Tươi ngon mỗi ngày',
   logo: '',
-  hotline: '1900 1234',
-  email: 'hotro@taphoaxanh.vn',
-  address: '123 Lê Lợi, Quận 1, TP. Hồ Chí Minh',
+  hotline: '',
+  email: '',
+  address: '',
   openingHours: '07:00 – 22:00 (cả tuần)',
   announcement: '🚚 Miễn phí giao hàng cho đơn từ 300.000₫ · Giao nhanh trong 2 giờ',
-  taxCode: '0312345678',
+  taxCode: '',
   vatRate: 8,
   invoiceFooter: 'Cảm ơn quý khách đã mua sắm! Hàng đã mua được đổi trả trong 7 ngày kèm hoá đơn.',
   shippingFee: 20000,
@@ -52,8 +52,9 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   minOrderValue: 0,
   deliverySlots: ['08:00 – 10:00', '10:00 – 12:00', '14:00 – 16:00', '16:00 – 18:00', '18:00 – 20:00'],
   deliveryDaysAhead: 3,
-  payment: { cod: true, bankTransfer: true, vnpay: true },
-  bank: { bankBin: '970436', bankName: 'Vietcombank', accountNo: '0123456789', accountName: 'CONG TY TAP HOA XANH' },
+  // Chuyển khoản tắt cho tới khi cửa hàng nhập tài khoản ngân hàng của chính mình
+  payment: { cod: true, bankTransfer: false, vnpay: true },
+  bank: { bankBin: '970436', bankName: 'Vietcombank', accountNo: '', accountName: '' },
   banners: [
     {
       image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=1600&q=80',
