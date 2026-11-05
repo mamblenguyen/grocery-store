@@ -8,6 +8,8 @@ import { ProductCard } from '@/components/ProductCard';
 import { Loading, Row, SectionHeader, T } from '@/components/ui';
 import { useNotifications } from '@/context/notifications';
 import { useSettings } from '@/context/settings';
+import { useStore } from '@/context/store';
+import { PlatformIntro, StorePicker } from '@/components/StorePicker';
 import { api, imageUrl } from '@/lib/api';
 import { money } from '@/lib/format';
 import { useGrid } from '@/lib/layout';
@@ -15,7 +17,21 @@ import { C, R } from '@/lib/theme';
 import type { Category, Paged, Product } from '@/lib/types';
 
 export default function Home() {
+  const { store, ready } = useStore();
+  if (!ready) return <Loading />;
+  // Chưa chọn cửa hàng → hiện danh bạ cửa hàng của nền tảng
+  if (!store)
+    return (
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.bg }}>
+        <StorePicker header={<PlatformIntro />} />
+      </SafeAreaView>
+    );
+  return <StoreHome key={store.slug} />;
+}
+
+function StoreHome() {
   const { settings } = useSettings();
+  const { store } = useStore();
   const { unread } = useNotifications();
   const { item, width, isTablet } = useGrid();
   const [cats, setCats] = useState<Category[]>([]);
@@ -54,10 +70,13 @@ export default function Home() {
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.white }}>
       <View style={st.header}>
         <Row style={{ justifyContent: 'space-between' }}>
-          <View>
-            <Text style={st.brand}>{settings.storeName}</Text>
-            <Text style={st.slogan} numberOfLines={1}>{settings.slogan}</Text>
-          </View>
+          <Pressable testID="change-store" onPress={() => router.push('/stores')} style={{ flex: 1, marginRight: 10 }} accessibilityLabel="Đổi cửa hàng">
+            <Row gap={6}>
+              <Text style={st.brand} numberOfLines={1}>{settings.storeName || store?.name}</Text>
+              <Ionicons name="chevron-down" size={18} color={C.brand700} />
+            </Row>
+            <Text style={st.slogan} numberOfLines={1}>{settings.slogan || 'Chạm để đổi cửa hàng'}</Text>
+          </Pressable>
           <Pressable testID="bell" onPress={() => router.push('/account/notifications')} style={st.bell} accessibilityLabel="Thông báo">
             <Ionicons name="notifications-outline" size={22} color={C.ink} />
             {unread > 0 && <View style={st.dot}><Text style={st.dotT}>{unread > 9 ? '9+' : unread}</Text></View>}
@@ -127,7 +146,7 @@ export default function Home() {
 
 const st = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 6, gap: 12, backgroundColor: C.white },
-  brand: { fontSize: 22, fontWeight: '800', color: C.brand700 },
+  brand: { fontSize: 22, fontWeight: '800', color: C.brand700, flexShrink: 1 },
   slogan: { fontSize: 12, color: C.muted },
   bell: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.line2, alignItems: 'center', justifyContent: 'center' },
   dot: { position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: C.red, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },

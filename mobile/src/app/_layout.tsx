@@ -7,12 +7,14 @@ import { AuthProvider } from '@/context/auth';
 import { CartProvider } from '@/context/cart';
 import { NotificationsProvider } from '@/context/notifications';
 import { SettingsProvider } from '@/context/settings';
+import { StoreProvider } from '@/context/store';
 import { WishlistProvider } from '@/context/wishlist';
 import { C } from '@/lib/theme';
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
+      <StoreProvider>
       <SettingsProvider>
         <AuthProvider>
           <NotificationsProvider>
@@ -33,6 +35,7 @@ export default function RootLayout() {
                   <Stack.Screen name="login" options={{ title: 'Đăng nhập', presentation: 'modal' }} />
                   <Stack.Screen name="register" options={{ title: 'Tạo tài khoản', presentation: 'modal' }} />
                   <Stack.Screen name="forgot-password" options={{ title: 'Quên mật khẩu', presentation: 'modal' }} />
+                  <Stack.Screen name="stores" options={{ title: 'Chọn cửa hàng' }} />
                 </Stack>
                 <ToastHost />
               </CartProvider>
@@ -40,6 +43,7 @@ export default function RootLayout() {
           </NotificationsProvider>
         </AuthProvider>
       </SettingsProvider>
+      </StoreProvider>
     </SafeAreaProvider>
   );
 }

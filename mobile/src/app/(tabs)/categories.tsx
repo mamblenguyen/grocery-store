@@ -3,14 +3,17 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
-import { Loading } from '@/components/ui';
+import { Button, Empty, Loading } from '@/components/ui';
+import { useStore } from '@/context/store';
 import { api, imageUrl } from '@/lib/api';
 import { C, R, shadow } from '@/lib/theme';
 import type { Category } from '@/lib/types';
 
 export default function Categories() {
+  const { store } = useStore();
   const [cats, setCats] = useState<Category[] | null>(null);
-  useEffect(() => { api<Category[]>('/categories').then(setCats).catch(() => setCats([])); }, []);
+  useEffect(() => { if (store) { setCats(null); api<Category[]>('/categories').then(setCats).catch(() => setCats([])); } }, [store?.slug]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!store) return <Empty icon="storefront-outline" text="Hãy chọn cửa hàng để xem danh mục"><Button title="Chọn cửa hàng" onPress={() => router.push('/stores')} /></Empty>;
   if (!cats) return <Loading />;
   return (
     <FlatList

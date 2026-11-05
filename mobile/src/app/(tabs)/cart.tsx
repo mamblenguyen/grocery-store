@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Card, Empty, QtyStepper, Row, T } from '@/components/ui';
 import { useCart } from '@/context/cart';
 import { useSettings } from '@/context/settings';
+import { useStore } from '@/context/store';
 import { api, imageUrl } from '@/lib/api';
 import { money } from '@/lib/format';
 import { C, R } from '@/lib/theme';
@@ -14,6 +15,7 @@ import { C, R } from '@/lib/theme';
 export default function CartTab() {
   const { items, update, remove, subtotal, clear } = useCart();
   const { settings } = useSettings();
+  const { store } = useStore();
   const insets = useSafeAreaInsets();
   const [error, setError] = useState('');
   useEffect(() => {
@@ -21,7 +23,8 @@ export default function CartTab() {
     api('/orders/preview', { method: 'POST', json: { items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })) } }).then(() => setError('')).catch((e) => setError(e.message));
   }, [JSON.stringify(items.map((i) => [i.variantId, i.quantity]))]); // eslint-disable-line
 
-  if (!items.length) return <Empty icon="cart-outline" text="Giỏ hàng của bạn đang trống"><Button title="Mua sắm ngay" onPress={() => router.push('/products')} /></Empty>;
+  if (!store) return <Empty icon="storefront-outline" text="Chưa chọn cửa hàng"><Button title="Chọn cửa hàng" onPress={() => router.push('/stores')} /></Empty>;
+  if (!items.length) return <Empty icon="cart-outline" text={`Giỏ hàng tại ${store.name} đang trống`}><Button title="Mua sắm ngay" onPress={() => router.push('/products')} /></Empty>;
   const t = settings.freeShippingThreshold;
   const ship = t && subtotal >= t ? 0 : settings.shippingFee;
   return (

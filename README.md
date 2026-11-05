@@ -1,4 +1,6 @@
-# 🛒 Tạp Hoá Xanh – Hệ thống quản lý & bán hàng tạp hoá
+# 🛒 Chợ Tạp Hoá – Nền tảng bán hàng cho nhiều cửa hàng tạp hoá
+
+> **Đa cửa hàng (multi-tenant):** bạn là **Super Admin** của nền tảng, quản lý nhiều **đối tác**. Mỗi đối tác có cửa hàng riêng (`/s/<slug>`), tài khoản/mật khẩu riêng, dữ liệu (sản phẩm, kho, đơn, khách, cài đặt, thanh toán) **tách biệt hoàn toàn**, có **gói dịch vụ & hạn dùng**.
 
 Dự án full-stack: **NestJS + Prisma + MySQL** (backend), **Next.js 15 + Tailwind CSS 4** (web khách hàng + quản trị) và **app điện thoại Expo / React Native** dùng chung cho khách hàng & nhân viên. Sản phẩm hỗ trợ **nhiều biến thể** (vd: Khối lượng × Hương vị), mỗi biến thể có SKU, giá và tồn kho riêng.
 
@@ -8,7 +10,10 @@ grocery-store/
 │   ├── prisma/         # schema.prisma, migrations, seed.ts
 │   └── src/
 │       ├── auth/       # Đăng ký, đăng nhập JWT, hồ sơ, đổi mật khẩu
-│       ├── users/      # (Admin) quản lý người dùng, phân quyền, khoá tài khoản
+│       ├── super/      # (Super Admin) đối tác, gói dịch vụ, gia hạn, phiếu thu, người dùng
+│       ├── stores/     # Danh bạ cửa hàng công khai, bảng giá gói
+│       ├── common/     # tenant.ts + tenant.middleware.ts (xác định cửa hàng), auth.guard, plan-limits
+│       ├── users/      # Nhân viên, khách hàng, gói dịch vụ của từng cửa hàng
 │       ├── categories/ # Danh mục (hỗ trợ danh mục cha/con)
 │       ├── products/   # Sản phẩm + thuộc tính + biến thể
 │       ├── orders/     # Đặt hàng, luồng trạng thái, huỷ đơn & hoàn kho
@@ -23,14 +28,35 @@ grocery-store/
 ├── mobile/             # App điện thoại Expo (Android / iOS / web) – xem mobile/README.md
 ├── frontend/           # Next.js App Router (cổng 3000)
 │   └── src/app/
-│       ├── (shop)/     # Trang khách hàng
-│       ├── admin/      # Trang quản trị (POS, kho, cài đặt…)
+│       ├── (shop)/     # Trang nền tảng: danh bạ cửa hàng, đăng nhập, tài khoản, đơn hàng (dùng chung)
+│       ├── s/[store]/  # Website riêng của từng cửa hàng: trang chủ, sản phẩm, giỏ, thanh toán
+│       ├── admin/      # Quản trị cửa hàng (POS, kho, nhân viên, gói dịch vụ…)
+│       ├── super/      # Quản trị nền tảng (Super Admin)
 │       └── print/      # Trang in hoá đơn A4/K80, phiếu kho, tem QR
 ├── docker-compose.yml  # MySQL 8 (tuỳ chọn, nếu máy chưa có MySQL)
 ├── .github/workflows/  # CI/CD: test, deploy production & preview lên Vercel
 ├── scripts/            # dev.mjs (chạy local 1 lệnh), vercel-setup.sh, smoke-test.sh
 ├── package.json        # npm run dev
 └── DEPLOY.md           # Hướng dẫn triển khai
+```
+
+## 🏢 Nền tảng đa cửa hàng
+
+| Vai trò | Vào đâu | Làm được gì |
+|---|---|---|
+| **Super Admin** (bạn) | `/super` (web) · tab **Nền tảng** (app) | Tổng quan (số cửa hàng, MRR, GMV, sắp hết hạn), **tạo cửa hàng + tài khoản chủ**, đổi gói, **gia hạn** (tự ghi phiếu thu), tạm ngưng / mở lại / đóng, đặt lại mật khẩu, quản lý gói dịch vụ, phiếu thu, toàn bộ người dùng, **"Quản trị hộ"** bất kỳ cửa hàng nào |
+| **Chủ cửa hàng** (ADMIN) | `/admin` | Toàn quyền cửa hàng của mình + thêm **nhân viên**, cài đặt, xem **gói dịch vụ** (mức dùng, hạn, lịch sử thanh toán, **mã QR cửa hàng** để in dán quầy) |
+| **Nhân viên** (STAFF) | `/admin` · tab **Quản lý** | POS, kho, đơn hàng, báo cáo của cửa hàng mình |
+| **Khách hàng** | `/` → chọn cửa hàng → `/s/<slug>` | 1 tài khoản dùng chung mọi cửa hàng; giỏ hàng riêng từng cửa hàng; đơn hàng tổng hợp có tên cửa hàng |
+
+- **Cách ly dữ liệu** ở backend: storefront gửi header `X-Store: <slug>`; nhân viên luôn bị khoá vào cửa hàng của tài khoản (bỏ qua mọi header); super admin quản trị hộ qua `X-Store-Id`. Truy cập chéo cửa hàng → 404/403 (có bộ test tự động).
+- **Gói & hạn dùng**: gói giới hạn số sản phẩm / nhân viên. **Hết hạn** → cửa hàng chỉ *xem* dữ liệu (ghi → 402), storefront tạm ngưng nhận đơn online; **tạm ngưng** → khách & nhân viên không truy cập được; còn ≤ 7 ngày → hiện cảnh báo.
+- SKU, mã giảm giá, slug sản phẩm/danh mục chỉ cần **duy nhất trong 1 cửa hàng**.
+- Nâng cấp từ bản 1 cửa hàng: migration `20261105040000_multi_store` **giữ nguyên dữ liệu cũ**, gom vào cửa hàng `cua-hang-chinh` (gói "unlimited"); tạo tài khoản super admin bằng lệnh bên dưới.
+
+```bash
+cd backend
+npm run create-super-admin -- ban@email.com MatKhauManh "Tên của bạn"
 ```
 
 ## ✨ Tính năng
@@ -132,13 +158,16 @@ App điện thoại: `npm run mobile` (Expo) hoặc `npm run mobile:web` (chạy
 Các lệnh khác ở thư mục gốc: `npm run db:reset` (xoá DB & seed lại), `npm run db:studio` (xem dữ liệu bằng Prisma Studio), `npm run build`.
 
 ### Tài khoản demo (mật khẩu `123456`)
-| Vai trò | Email |
-|---|---|
-| Quản trị | admin@grocery.local |
-| Nhân viên | staff@grocery.local |
-| Khách hàng | customer@grocery.local |
+| Vai trò | Email | Vào |
+|---|---|---|
+| **Super Admin** (nền tảng) | super@grocery.local | http://localhost:3000/super |
+| Chủ cửa hàng *Tạp Hoá Xanh* (gói Chuyên nghiệp, 12 tháng) | admin@grocery.local | /admin |
+| Nhân viên *Tạp Hoá Xanh* | staff@grocery.local | /admin |
+| Chủ cửa hàng *Tạp Hoá Bà Năm* (gói Cơ bản, 1 tháng) | owner2@grocery.local | /admin |
+| Khách hàng | customer@grocery.local | / → chọn cửa hàng |
 
-Mã giảm giá mẫu: `WELCOME10` (giảm 10%, tối đa 50k, đơn từ 100k), `GIAM20K` (giảm 20k, đơn từ 200k).
+Cửa hàng mẫu: http://localhost:3000/s/tap-hoa-xanh và http://localhost:3000/s/tap-hoa-ba-nam.
+Mã giảm giá mẫu: Tạp Hoá Xanh `WELCOME10` (giảm 10%, tối đa 50k, đơn từ 100k), `GIAM20K` (giảm 20k, đơn từ 200k); Bà Năm `BANAM5K`.
 
 ## 📡 API chính
 
@@ -196,4 +225,4 @@ Trình duyệt chỉ cho mở camera trên **HTTPS** hoặc **http://localhost**
 ## ⚙️ Biến môi trường
 
 **backend/.env**: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `BLOB_READ_WRITE_TOKEN`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_URL`, `VNPAY_RETURN_URL`
-**frontend/.env.local**: `NEXT_PUBLIC_API_URL`
+**frontend/.env.local**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_PLATFORM_NAME` (tên nền tảng, mặc định "Chợ Tạp Hoá"), `NEXT_PUBLIC_PLATFORM_HOTLINE` (hiện ở trang giới thiệu cho đối tác)

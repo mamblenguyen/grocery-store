@@ -8,7 +8,7 @@ import { Scanner } from '@/components/Scanner';
 import { StaffSearch, SV } from '@/components/StaffSearch';
 import { toast } from '@/components/Toast';
 import { Button, Card, Chip, Empty, Input, QtyStepper, Row, T } from '@/components/ui';
-import { useSettings } from '@/context/settings';
+import { useAdminSettings } from '@/context/settings';
 import { api } from '@/lib/api';
 import { confirmAsync } from '@/lib/confirm';
 import { scanFeedback } from '@/lib/feedback';
@@ -24,7 +24,7 @@ const KEY = 'pos_bill_mobile';
 
 export default function MobilePos() {
   useStaffGuard();
-  const { settings } = useSettings();
+  const { settings } = useAdminSettings();
   const insets = useSafeAreaInsets();
   const [lines, setLines] = useState<Line[]>([]);
   const [ready, setReady] = useState(false);
@@ -43,7 +43,7 @@ export default function MobilePos() {
   const [showQuick, setShowQuick] = useState(true);
   useEffect(() => {
     api<SV[]>('/admin/stock/variants?sellable=1&limit=1000').then(setQuick).catch(() => {});
-    api<{ id: number; name: string }[]>('/categories').then(setCats).catch(() => {});
+    api<{ id: number; name: string }[]>('/admin/categories').then(setCats).catch(() => {});
   }, []);
   const linesRef = useRef(lines);
   linesRef.current = lines;

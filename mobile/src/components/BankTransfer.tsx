@@ -4,13 +4,14 @@ import { Image } from 'expo-image';
 import { Pressable, Text, View } from 'react-native';
 import { useSettings } from '@/context/settings';
 import { money, vietQrUrl } from '@/lib/format';
+import type { StoreSettings } from '@/lib/types';
 import { C, R } from '@/lib/theme';
 import { toast } from './Toast';
 import { Card, Row, T } from './ui';
 
-export function BankTransfer({ code, amount }: { code: string; amount: number }) {
+export function BankTransfer({ code, amount, bank }: { code: string; amount: number; bank?: StoreSettings['bank'] }) {
   const { settings } = useSettings();
-  const b = settings.bank;
+  const b = bank ?? settings.bank;
   if (!b.accountNo) return null;
   const row = (label: string, value: string, copy = false) => (
     <Row style={{ justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: C.line2 }}>

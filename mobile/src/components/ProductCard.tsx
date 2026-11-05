@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useCart } from '@/context/cart';
+import { useStore } from '@/context/store';
 import { useWishlist } from '@/context/wishlist';
 import { imageUrl } from '@/lib/api';
 import { C, R, shadow } from '@/lib/theme';
@@ -13,6 +14,15 @@ import { Price, Stars } from './ui';
 export function ProductCard({ p, width }: { p: Product; width: number }) {
   const cart = useCart();
   const wl = useWishlist();
+  const shop = useStore();
+  // Sản phẩm của cửa hàng khác (VD: trong danh sách yêu thích) → chuyển cửa hàng trước khi mở
+  const otherStore = !!p.store && p.store.slug !== shop.store?.slug;
+  const open = async () => {
+    if (otherStore) {
+      try { await shop.selectSlug(p.store!.slug); } catch (e: any) { return toast(e.message, 'error'); }
+    }
+    router.push(`/products/${p.slug}`);
+  };
   const active = p.variants.filter((v) => v.isActive !== false);
   const best = active.reduce<(typeof active)[number] | undefined>((b, v) => {
     const o = v.compareAtPrice && v.compareAtPrice > v.price ? 1 - v.price / v.compareAtPrice : 0;
@@ -24,7 +34,7 @@ export function ProductCard({ p, width }: { p: Product; width: number }) {
   const single = active.length === 1 ? active[0] : null;
 
   const quickAdd = () => {
-    if (!single) return router.push(`/products/${p.slug}`);
+    if (!single || otherStore) return open();
     const inCart = cart.items.find((i) => i.variantId === single.id)?.quantity ?? 0;
     if (inCart >= single.stock) return toast(`Chỉ còn ${single.stock} sản phẩm`, 'error');
     cart.add({ variantId: single.id, productId: p.id, slug: p.slug, productName: p.name, variantName: single.name, image: p.thumbnail, price: single.price, stock: single.stock });
@@ -32,7 +42,7 @@ export function ProductCard({ p, width }: { p: Product; width: number }) {
   };
 
   return (
-    <Pressable testID={`product-${p.slug}`} onPress={() => router.push(`/products/${p.slug}`)} style={({ pressed }) => [st.card, shadow, { width }, pressed && { opacity: 0.92 }]}>
+    <Pressable testID={`product-${p.slug}`} onPress={open} style={({ pressed }) => [st.card, shadow, { width }, pressed && { opacity: 0.92 }]}>
       <View>
         <Image source={{ uri: imageUrl(p.thumbnail) }} style={{ width: '100%', aspectRatio: 1, backgroundColor: C.line2 }} contentFit="cover" transition={150} />
         {discount > 0 && <View style={st.sale}><Text style={st.saleT}>-{discount}%</Text></View>}

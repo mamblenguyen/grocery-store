@@ -39,6 +39,7 @@ export default function MyOrders() {
           renderItem={({ item: o }) => (
             <Card onPress={() => router.push(`/orders/${o.id}`)} style={{ gap: 10 }}>
               <Row style={{ justifyContent: 'space-between' }}><Text style={{ fontWeight: '800', color: C.ink }}>{o.code}</Text><StatusPill map={STATUS} value={o.status} /></Row>
+              {o.store && <Text style={{ color: C.brand700, fontWeight: '700', fontSize: 12 }}>🏪 {o.store.name}</Text>}
               <Row>
                 <Row gap={-10}>{o.items.map((it, i) => <Image key={i} source={{ uri: imageUrl(it.image) }} style={{ width: 44, height: 44, borderRadius: 10, borderWidth: 2, borderColor: '#fff' }} />)}</Row>
                 <T variant="muted" style={{ flex: 1 }} numberOfLines={2}>{o.items.map((i) => i.productName).join(', ')}</T>

@@ -80,13 +80,17 @@ Khi chưa có secrets Vercel, workflow vẫn chạy job **test** và bỏ qua de
 | `BLOB_READ_WRITE_TOKEN` | Blob store |
 | `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN` | setup script |
 | `SHIPPING_FEE`, `FREE_SHIPPING_THRESHOLD` | setup script, sửa được trên dashboard |
-| `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | setup script, chỉ dùng khi seed DB trống |
+| `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | setup script, chỉ dùng khi seed DB trống – tạo tài khoản **Super Admin** của nền tảng (production không tạo dữ liệu demo) |
 
 **grocery-store-web**: `NEXT_PUBLIC_API_URL` (workflow luôn ghi đè lúc build cho đúng API production/preview).
 
 Đổi biến xong cần deploy lại (Run workflow) để có hiệu lực.
 
 ## 4. Thay đổi database (migration)
+
+> **Nâng cấp lên bản đa cửa hàng**: migration `20261105040000_multi_store` tự chạy khi deploy, giữ nguyên dữ liệu cũ và gom vào cửa hàng `cua-hang-chinh`. Sau đó tạo super admin:
+> `cd backend && DATABASE_URL="mysql://…production…" npm run create-super-admin -- ban@email.com MatKhauManh "Tên"`
+> rồi đăng nhập `/super` để đổi tên / slug cửa hàng, gán gói và tạo thêm đối tác.
 
 ```bash
 cd backend

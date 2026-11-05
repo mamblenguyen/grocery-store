@@ -16,12 +16,27 @@ export const tokenStore = {
   clear: async () => { memToken = null; await secure.del(TOKEN_KEY); },
 };
 
+/** Cửa hàng đang mua (header X-Store) và cửa hàng super admin đang quản trị hộ (X-Store-Id cho /admin) */
+let currentStore: string | null = null;
+let actingStoreId: number | null = null;
+export const setApiStore = (slug: string | null) => { currentStore = slug; };
+/** Request đầu tiên phải chờ app nạp xong cửa hàng đã lưu (mở thẳng link sản phẩm / khởi động lại app) */
+let markStoreLoaded: () => void = () => {};
+const storeLoaded = new Promise<void>((r) => { markStoreLoaded = r; });
+export const storeRestored = () => markStoreLoaded();
+export const getApiStore = () => currentStore;
+export const setApiActing = (id: number | null) => { actingStoreId = id; };
+
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
 
-export async function api<T = any>(path: string, opts: { method?: string; json?: unknown; auth?: boolean } = {}): Promise<T> {
+export async function api<T = any>(path: string, opts: { method?: string; json?: unknown; auth?: boolean; store?: string | null } = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
+  if (opts.store === undefined) await storeLoaded;
+  const st = opts.store !== undefined ? opts.store : currentStore;
+  if (st) headers['X-Store'] = st;
+  if (actingStoreId && path.startsWith('/admin')) headers['X-Store-Id'] = String(actingStoreId);
   const token = await tokenStore.get();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (opts.json !== undefined) headers['Content-Type'] = 'application/json';

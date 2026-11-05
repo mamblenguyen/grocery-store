@@ -1,4 +1,6 @@
-# 📱 App Tạp Hoá Xanh (Expo / React Native)
+# 📱 App Chợ Tạp Hoá (Expo / React Native)
+
+> **Đa cửa hàng:** lần đầu mở app, khách **chọn cửa hàng** trong danh bạ hoặc **quét mã QR** dán tại quầy (mã lấy ở web `/admin/subscription`). Chạm tên cửa hàng ở trang chủ để đổi; mỗi cửa hàng có giỏ hàng riêng, đơn hàng hiện tên cửa hàng, "Mua lại" tự chuyển về đúng cửa hàng. Nhân viên đăng nhập sẽ tự mở cửa hàng của mình. **Super Admin** có tab **Nền tảng**: thống kê, danh sách đối tác, tạo cửa hàng, gia hạn, tạm ngưng/kích hoạt, đặt lại mật khẩu, **Quản trị hộ** (dùng POS/kho của cửa hàng đó).
 
 **Một app duy nhất** cho cả khách hàng và nhân viên: khách thấy các tab mua sắm; khi tài khoản **Quản trị / Nhân viên** đăng nhập, app hiện thêm tab **Quản lý** (POS quét mã, kho, đơn hàng, báo cáo). Dùng chung API với web (`backend/`).
 

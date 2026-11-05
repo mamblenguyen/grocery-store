@@ -5,7 +5,7 @@ import { useCart } from '@/context/cart';
 import { C } from '@/lib/theme';
 
 export default function TabsLayout() {
-  const { isStaff } = useAuth();
+  const { isStaff, isSuper, loading } = useAuth();
   const { count } = useCart();
   const icon = (name: keyof typeof Ionicons.glyphMap) => ({ color, size }: { color: unknown; size: number }) => <Ionicons name={name} size={size} color={color as string} />;
   return (
@@ -14,8 +14,8 @@ export default function TabsLayout() {
       <Tabs.Screen name="categories" options={{ title: 'Danh mục', tabBarIcon: icon('grid-outline') }} />
       <Tabs.Screen name="cart" options={{ title: 'Giỏ hàng', tabBarIcon: icon('cart-outline'), tabBarBadge: count > 0 ? (count > 99 ? '99+' : count) : undefined, tabBarBadgeStyle: { backgroundColor: C.red } }} />
       <Tabs.Screen name="account" options={{ title: 'Tài khoản', tabBarIcon: icon('person-outline') }} />
-      {/* Cùng 1 app: tab Quản lý chỉ hiện với ADMIN / STAFF */}
-      <Tabs.Screen name="manage" options={{ title: 'Quản lý', href: isStaff ? undefined : null, tabBarIcon: icon('briefcase-outline') }} />
+      {/* Cùng 1 app: tab Quản lý chỉ hiện với nhân viên / chủ cửa hàng / quản trị nền tảng */}
+      <Tabs.Screen name="manage" options={{ title: isSuper && !isStaff ? 'Nền tảng' : 'Quản lý', href: loading || isStaff || isSuper ? undefined : null, tabBarIcon: icon(isSuper && !isStaff ? 'shield-checkmark-outline' : 'briefcase-outline') }} />
     </Tabs>
   );
 }

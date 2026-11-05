@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
-import { Button, Card, Empty, Row, T } from '@/components/ui';
+import { Button, Card, Empty, Loading, Row, T } from '@/components/ui';
 import { useAuth } from '@/context/auth';
+import { SuperHome } from '@/components/SuperHome';
 import { api } from '@/lib/api';
 import { money } from '@/lib/format';
 import { C, R } from '@/lib/theme';
@@ -15,12 +16,45 @@ interface Dash {
 }
 
 export default function Manage() {
-  const { isStaff, user } = useAuth();
+  const { isStaff, isSuper, loading } = useAuth();
+  if (loading) return <Loading />;
+  // Super admin chưa chọn cửa hàng để quản trị hộ → màn hình nền tảng
+  if (isSuper && !isStaff) return <SuperHome />;
+  return <StoreManage />;
+}
+
+/** Thông báo quản trị hộ / hạn gói dịch vụ */
+function Banner() {
+  const { user, acting, setActing } = useAuth();
+  if (acting)
+    return (
+      <View style={{ backgroundColor: C.violet, borderRadius: R.lg, padding: 12, gap: 8 }}>
+        <Text style={{ color: '#fff', fontWeight: '600' }}>Đang quản trị hộ: <Text style={{ fontWeight: '800' }}>{acting.name}</Text></Text>
+        <Pressable testID="exit-acting" onPress={() => { const id = acting.id; setActing(null); router.push(`/super/store/${id}`); }} style={{ alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,.2)', borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 6 }}>
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Thoát về trang nền tảng</Text>
+        </Pressable>
+      </View>
+    );
+  const st = user?.store;
+  if (!st || st.daysLeft == null || st.daysLeft > 7) return null;
+  const expired = st.daysLeft <= 0;
+  return (
+    <View style={{ backgroundColor: expired ? C.red50 : C.amber50, borderRadius: R.lg, padding: 12, borderWidth: 1, borderColor: expired ? '#fecaca' : '#fde68a', flexDirection: 'row', gap: 8 }}>
+      <Ionicons name="warning-outline" size={20} color={expired ? C.red : C.amber} />
+      <Text style={{ flex: 1, color: expired ? '#991b1b' : '#92400e', fontWeight: '600' }}>
+        {expired ? `Gói ${st.plan?.name ?? ''} đã hết hạn – cửa hàng chỉ xem được dữ liệu, chưa bán hàng được. Liên hệ quản trị nền tảng để gia hạn.` : `Gói ${st.plan?.name ?? ''} còn ${st.daysLeft} ngày. Liên hệ quản trị nền tảng để gia hạn.`}
+      </Text>
+    </View>
+  );
+}
+
+function StoreManage() {
+  const { isStaff, user, acting } = useAuth();
   const { width } = useWindowDimensions();
   const [d, setD] = useState<Dash | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const load = useCallback(() => api<Dash>('/admin/dashboard?days=7').then(setD).catch(() => {}), []);
-  useFocusEffect(useCallback(() => { if (isStaff) load(); }, [isStaff, load]));
+  useFocusEffect(useCallback(() => { if (isStaff) load(); }, [isStaff, load, acting?.id]));
   if (!isStaff) return <Empty icon="lock-closed-outline" text="Chỉ dành cho nhân viên cửa hàng"><Button title="Đăng nhập" onPress={() => router.push('/login')} /></Empty>;
 
   const cols = width < 500 ? 3 : 4;
@@ -38,7 +72,8 @@ export default function Manage() {
   const pending = d?.ordersByStatus.PENDING ?? 0;
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 14, maxWidth: 900, width: '100%', alignSelf: 'center' }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}>
-      <T variant="muted">Xin chào, {user?.fullName}</T>
+      <Banner />
+      <T variant="muted">Xin chào, {user?.fullName}{(acting ?? user?.store) ? ` · ${(acting ?? user?.store)!.name}` : ''}</T>
       <Row style={{ flexWrap: 'wrap' }} gap={10}>
         {[['Doanh thu hôm nay', money(d?.stats.todayRevenue), 'cash-outline'], ['Đơn hôm nay', String(d?.stats.todayOrders ?? '–'), 'receipt-outline']].map(([l, v, i]) => (
           <Card key={l} style={{ flex: 1, minWidth: 150, gap: 6 }}>

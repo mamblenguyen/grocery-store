@@ -1,5 +1,6 @@
 'use client';
 import { BadgeCheck, CalendarClock, Package, Users } from 'lucide-react';
+import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { Spinner } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -27,7 +28,10 @@ function Meter({ icon, label, used, max }: { icon: React.ReactNode; label: strin
 export default function SubscriptionPage() {
   const [d, setD] = useState<Sub | null>(null);
   const [err, setErr] = useState('');
+  const [qr, setQr] = useState('');
   useEffect(() => { api<Sub>('/admin/subscription').then(setD).catch((e) => setErr(e.message)); }, []);
+  const link = d ? `${typeof window !== 'undefined' ? window.location.origin : ''}/s/${d.store.slug}` : '';
+  useEffect(() => { if (link) QRCode.toDataURL(link, { margin: 1, width: 360 }).then(setQr); }, [link]);
   if (err) return <div className="card text-center text-slate-500">{err}</div>;
   if (!d) return <Spinner />;
   const { store: s } = d;
@@ -45,6 +49,19 @@ export default function SubscriptionPage() {
           <div className="flex items-center justify-end gap-1.5 text-sm text-slate-500"><CalendarClock className="h-4 w-4" /> Hạn sử dụng</div>
           <div className={`text-lg font-bold ${expired ? 'text-red-600' : s.daysLeft != null && s.daysLeft <= 7 ? 'text-amber-600' : 'text-ink'}`}>
             {s.planExpiresAt ? `${date(s.planExpiresAt)} · ${expired ? 'đã hết hạn' : `còn ${s.daysLeft} ngày`}` : 'Không thời hạn'}
+          </div>
+        </div>
+      </div>
+      <div className="card flex flex-wrap items-center gap-5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {qr && <img src={qr} alt="QR cửa hàng" className="h-36 w-36 rounded-xl border border-slate-200" />}
+        <div className="min-w-0 flex-1 space-y-2">
+          <h2 className="font-bold">Mã QR cửa hàng</h2>
+          <p className="text-sm text-slate-500">In và dán tại quầy: khách quét bằng camera điện thoại hoặc trong app để mở đúng cửa hàng của bạn.</p>
+          <a href={link} target="_blank" className="link block truncate text-sm">{link}</a>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-outline btn-sm" onClick={() => navigator.clipboard?.writeText(link)}>Sao chép link</button>
+            {qr && <a className="btn-primary btn-sm" href={qr} download={`qr-${s.slug}.png`}>Tải ảnh QR</a>}
           </div>
         </div>
       </div>

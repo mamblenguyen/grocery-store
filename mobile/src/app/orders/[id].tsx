@@ -8,8 +8,9 @@ import { BankTransfer } from '@/components/BankTransfer';
 import { OrderTimeline } from '@/components/OrderTimeline';
 import { toast } from '@/components/Toast';
 import { Button, Card, Empty, Loading, Row, StatusPill, T } from '@/components/ui';
-import { useCart } from '@/context/cart';
-import { useSettings } from '@/context/settings';
+import { addToStoredCart, useCart, type CartItem } from '@/context/cart';
+import { FALLBACK_SETTINGS, useStoreSettings } from '@/context/settings';
+import { useStore } from '@/context/store';
 import { api, imageUrl } from '@/lib/api';
 import { confirmAsync } from '@/lib/confirm';
 import { dateOnly, dateTime, money, PAYMENT_METHOD } from '@/lib/format';
@@ -21,7 +22,7 @@ interface Line { variantId: number; quantity: number; productId: number; product
 
 export default function OrderDetail() {
   const { id, success } = useLocalSearchParams<{ id: string; success?: string }>();
-  const { settings } = useSettings();
+  const shop = useStore();
   const cart = useCart();
   const [o, setO] = useState<Order | null>(null);
   const [error, setError] = useState('');
@@ -29,6 +30,8 @@ export default function OrderDetail() {
   const load = useCallback(() => api<Order>(`/orders/my/${id}`).then(setO).catch((e) => setError(e.message)), [id]);
   // Tải lại khi quay về màn hình (vd sau khi thanh toán VNPay)
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Cài đặt (tài khoản ngân hàng, VNPay) của cửa hàng bán đơn này
+  const settings = useStoreSettings(o?.store?.slug) ?? FALLBACK_SETTINGS;
 
   if (error) return <Empty icon="alert-circle-outline" text={error} />;
   if (!o) return <Loading />;
@@ -47,23 +50,29 @@ export default function OrderDetail() {
     try { setO(await api<Order>(`/orders/my/${o.id}/cancel`, { method: 'PATCH', json: { reason: 'Khách huỷ trên app' } })); toast('Đã huỷ đơn hàng'); }
     catch (e: any) { toast(e.message, 'error'); }
   };
+  /** Mua lại: thêm vào giỏ của đúng cửa hàng đã bán, rồi chuyển sang cửa hàng đó */
   const reorder = async () => {
-    let added = 0;
+    const slug = o.store?.slug;
+    if (!slug) return;
+    const add: CartItem[] = [];
     for (const it of o.items ?? []) {
       if (!it.variantId) continue;
       try {
-        const r = await api<{ lines: Line[] }>('/orders/preview', { method: 'POST', json: { items: [{ variantId: it.variantId, quantity: it.quantity }] } });
+        const r = await api<{ lines: Line[] }>('/orders/preview', { method: 'POST', json: { items: [{ variantId: it.variantId, quantity: it.quantity }] }, store: slug });
         const l = r.lines[0];
-        cart.add({ variantId: l.variantId, productId: l.productId, slug: l.slug, productName: l.productName, variantName: l.variantName, image: l.image, price: l.price, stock: l.stock }, l.quantity);
-        added++;
+        add.push({ variantId: l.variantId, productId: l.productId, slug: l.slug, productName: l.productName, variantName: l.variantName, image: l.image, price: l.price, stock: l.stock, quantity: l.quantity });
       } catch {}
     }
-    if (added) { toast(`Đã thêm ${added} sản phẩm vào giỏ`); router.push('/cart'); } else toast('Sản phẩm trong đơn đã hết hàng', 'error');
+    if (!add.length) return toast('Sản phẩm trong đơn đã hết hàng', 'error');
+    await addToStoredCart(slug, add);
+    try { if (shop.store?.slug !== slug) await shop.selectSlug(slug); else await cart.reload(); } catch (e: any) { return toast(e.message, 'error'); }
+    toast(`Đã thêm ${add.length} sản phẩm vào giỏ`); router.push('/cart');
   };
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 760, width: '100%', alignSelf: 'center' }}>
       <Stack.Screen options={{ title: o.code }} />
+      {o.store && <Row gap={6}><Ionicons name="storefront-outline" size={16} color={C.brand700} /><Text style={{ color: C.brand700, fontWeight: '700' }}>{o.store.name}</Text></Row>}
       {success && (
         <View style={{ backgroundColor: C.brand600, borderRadius: R.lg, padding: 16, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
           <Ionicons name="checkmark-circle" size={36} color="#fff" />
@@ -75,7 +84,7 @@ export default function OrderDetail() {
         <OrderTimeline status={o.status} />
         {!!o.cancelReason && <T variant="muted">Lý do huỷ: {o.cancelReason}</T>}
       </Card>
-      {unpaid && o.paymentMethod === 'BANK_TRANSFER' && <BankTransfer code={o.code} amount={o.total} />}
+      {unpaid && o.paymentMethod === 'BANK_TRANSFER' && <BankTransfer code={o.code} amount={o.total} bank={settings.bank} />}
       {unpaid && settings.payment.vnpay && o.channel === 'ONLINE' && (
         <Card style={{ gap: 10, backgroundColor: C.sky50 }}>
           <T>{o.paymentMethod === 'VNPAY' ? 'Đơn hàng chưa được thanh toán qua VNPay.' : 'Bạn có thể thanh toán online ngay qua VNPay.'}</T>

@@ -5,7 +5,7 @@ import { Linking, ScrollView, Text, View } from 'react-native';
 import { OrderTimeline } from '@/components/OrderTimeline';
 import { toast } from '@/components/Toast';
 import { Button, Card, Input, Loading, Row, StatusPill, T } from '@/components/ui';
-import { useSettings } from '@/context/settings';
+import { useAdminSettings } from '@/context/settings';
 import { api, imageUrl } from '@/lib/api';
 import { confirmAsync } from '@/lib/confirm';
 import { dateOnly, dateTime, money, PAYMENT_METHOD } from '@/lib/format';
@@ -19,7 +19,7 @@ const NEXT: Record<string, string[]> = { PENDING: ['CONFIRMED'], CONFIRMED: ['SH
 export default function StaffOrder() {
   useStaffGuard();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { settings } = useSettings();
+  const { settings } = useAdminSettings();
   const [o, setO] = useState<Order | null>(null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
