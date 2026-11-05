@@ -3,14 +3,14 @@
  * Khởi động toàn bộ dự án ở local bằng 1 lệnh:  npm run dev
  *
  *  1. Tạo file env nếu chưa có (backend/.env, frontend/.env.local)
- *  2. Kiểm tra kết nối PostgreSQL
+ *  2. Kiểm tra kết nối MySQL
  *  3. Cài dependencies nếu chưa cài
  *  4. Tạo DB (nếu chưa có) + chạy migration + seed dữ liệu mẫu (chỉ khi DB trống)
  *  5. Chạy song song backend (NestJS, watch) và frontend (Next.js dev)
  *
  * Tuỳ chọn (truyền sau "--"):
- *   npm run dev -- --db-port=5433                  đổi port PostgreSQL
- *   npm run dev -- --db-url=postgresql://u:p@host:5432/grocery?schema=public
+ *   npm run dev -- --db-port=5433                  đổi port MySQL
+ *   npm run dev -- --db-url=mysql://root:matkhau@localhost:3306/grocery
  *   npm run dev -- --skip-install --skip-db
  * Các tuỳ chọn --db-* được ghi lại vào backend/.env cho các lần chạy sau.
  */
@@ -88,33 +88,30 @@ for (const [file, example] of [[API_ENV, join(API_DIR, '.env.example')], [WEB_EN
 }
 if (args['db-url']) {
   setEnv(API_ENV, 'DATABASE_URL', args['db-url']);
-  setEnv(API_ENV, 'DATABASE_URL_UNPOOLED', args['db-url']);
 }
 if (args['db-port']) {
   const u = new URL(readEnv(API_ENV).DATABASE_URL);
   u.port = String(args['db-port']);
   setEnv(API_ENV, 'DATABASE_URL', u.toString());
-  setEnv(API_ENV, 'DATABASE_URL_UNPOOLED', u.toString());
 }
 const env = readEnv(API_ENV);
 if (!env.DATABASE_URL) die('backend/.env thiếu DATABASE_URL');
-if (!env.DATABASE_URL_UNPOOLED) setEnv(API_ENV, 'DATABASE_URL_UNPOOLED', env.DATABASE_URL);
 const db = new URL(env.DATABASE_URL);
 const API_PORT = Number(env.PORT) || 4000;
 const WEB_PORT = 3000;
-ok(`Database: ${db.protocol}//${db.username}:****@${db.hostname}:${db.port || 5432}${db.pathname}`);
+ok(`Database: ${db.protocol}//${db.username}:****@${db.hostname}:${db.port || 3306}${db.pathname}`);
 
 // ───────────────────────────── 2. DB ─────────────────────────────
-step('Kiểm tra PostgreSQL');
-if (!(await canConnect(db.hostname, Number(db.port) || 5432))) {
+step('Kiểm tra MySQL');
+if (!(await canConnect(db.hostname, Number(db.port) || 3306))) {
   die(
-    `Không kết nối được PostgreSQL tại ${db.hostname}:${db.port || 5432}.\n` +
-      `  • Kiểm tra PostgreSQL đã chạy chưa (hoặc: docker compose up -d)\n` +
+    `Không kết nối được MySQL tại ${db.hostname}:${db.port || 3306}.\n` +
+      `  • Kiểm tra MySQL đã chạy chưa (hoặc: docker compose up -d)\n` +
       `  • Nếu DB của bạn ở port khác:  npm run dev -- --db-port=<PORT>\n` +
       `  • Hoặc sửa DATABASE_URL trong backend/.env (user, mật khẩu, port, tên DB)`,
   );
 }
-ok('PostgreSQL đang mở');
+ok('MySQL đang mở');
 
 for (const p of [API_PORT, WEB_PORT]) {
   if (await canConnect('127.0.0.1', p, 800)) die(`Port ${p} đang bị chương trình khác chiếm. Hãy tắt nó rồi chạy lại.`);

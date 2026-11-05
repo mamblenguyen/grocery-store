@@ -30,23 +30,32 @@ export class InventoryService {
 
   async stock(q: QueryStockDto) {
     const { skip, take, page, limit } = paginate(q.page, q.limit);
-    const search = q.search ? `%${q.search}%` : null;
-    // So sánh stock <= lowStockThreshold giữa 2 cột -> dùng raw SQL
-    const cond = Prisma.sql`
-      WHERE 1=1
-      ${q.filter === 'low' ? Prisma.sql`AND v.stock > 0 AND v.stock <= v."lowStockThreshold"` : Prisma.empty}
-      ${q.filter === 'out' ? Prisma.sql`AND v.stock <= 0` : Prisma.empty}
-      ${search ? Prisma.sql`AND (p.name ILIKE ${search} OR v.sku ILIKE ${search} OR v.name ILIKE ${search})` : Prisma.empty}`;
-    const items = await this.prisma.$queryRaw<any[]>`
-      SELECT v.id, v.sku, v.name, v.stock, v."lowStockThreshold", v.price, v."costPrice", v."isActive",
-             p.id AS "productId", p.name AS "productName", p.thumbnail
-      FROM "ProductVariant" v JOIN "Product" p ON p.id = v."productId"
-      ${cond}
-      ORDER BY v.stock ASC, p.name ASC
-      LIMIT ${take} OFFSET ${skip}`;
-    const [{ count }] = await this.prisma.$queryRaw<{ count: bigint }[]>`
-      SELECT COUNT(*)::bigint AS count FROM "ProductVariant" v JOIN "Product" p ON p.id = v."productId" ${cond}`;
-    return paged(items, Number(count), page, limit);
+    const threshold = this.prisma.productVariant.fields.lowStockThreshold;
+    const where: Prisma.ProductVariantWhereInput = {
+      ...(q.filter === 'low' && { stock: { gt: 0, lte: threshold } }),
+      ...(q.filter === 'out' && { stock: { lte: 0 } }),
+      ...(q.search && {
+        OR: [
+          { sku: { contains: q.search } },
+          { name: { contains: q.search } },
+          { product: { name: { contains: q.search } } },
+        ],
+      }),
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.productVariant.findMany({
+        where, skip, take,
+        orderBy: [{ stock: 'asc' }, { product: { name: 'asc' } }],
+        include: { product: { select: { id: true, name: true, thumbnail: true } } },
+      }),
+      this.prisma.productVariant.count({ where }),
+    ]);
+    const items = rows.map((v) => ({
+      id: v.id, sku: v.sku, name: v.name, stock: v.stock, lowStockThreshold: v.lowStockThreshold,
+      price: v.price, costPrice: v.costPrice, isActive: v.isActive,
+      productId: v.product.id, productName: v.product.name, thumbnail: v.product.thumbnail,
+    }));
+    return paged(items, total, page, limit);
   }
 
   async logs(q: QueryLogsDto) {
@@ -56,9 +65,9 @@ export class InventoryService {
       ...(q.reason && { reason: q.reason }),
       ...(q.search && {
         OR: [
-          { variant: { sku: { contains: q.search, mode: 'insensitive' } } },
-          { variant: { product: { name: { contains: q.search, mode: 'insensitive' } } } },
-          { note: { contains: q.search, mode: 'insensitive' } },
+          { variant: { sku: { contains: q.search } } },
+          { variant: { product: { name: { contains: q.search } } } },
+          { note: { contains: q.search } },
         ],
       }),
     };

@@ -1,7 +1,7 @@
 {
   "name": "grocery-store",
   "private": true,
-  "description": "Quản lý bán hàng tạp hoá – NestJS + Next.js + Prisma + PostgreSQL",
+  "description": "Quản lý bán hàng tạp hoá – NestJS + Next.js + Prisma + MySQL",
   "engines": {
     "node": ">=20"
   },

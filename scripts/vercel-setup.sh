@@ -14,9 +14,7 @@
 # Dùng:
 #   export VERCEL_TOKEN=xxxxx               # tạo tại https://vercel.com/account/tokens
 #   export VERCEL_SCOPE=my-team             # (tuỳ chọn) slug team, bỏ trống = tài khoản cá nhân
-#   export NEON_API_KEY=xxxxx               # (tuỳ chọn) để mỗi PR có DB riêng – https://console.neon.tech/app/settings/api-keys
-#   export NEON_PROJECT_ID=xxxxx            # (tuỳ chọn) ID project Neon đang dùng cho production
-#   export DATABASE_URL=... DATABASE_URL_UNPOOLED=...   # (tuỳ chọn) nếu KHÔNG dùng Neon từ Vercel Marketplace
+#   export DATABASE_URL="mysql://USER:PASS@HOST:3306/grocery?sslaccept=strict"   # MySQL online cho production
 #   ./scripts/vercel-setup.sh
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -101,7 +99,6 @@ fi
 
 if [ -n "${DATABASE_URL:-}" ]; then
   set_env "$API_ID" DATABASE_URL "$DATABASE_URL" '["production","preview"]'
-  set_env "$API_ID" DATABASE_URL_UNPOOLED "${DATABASE_URL_UNPOOLED:-$DATABASE_URL}" '["production","preview"]'
 fi
 
 say "Biến môi trường – Web"
@@ -115,11 +112,6 @@ gh secret set VERCEL_PROJECT_ID_API --repo "$REPO" --body "$API_ID"
 gh secret set VERCEL_PROJECT_ID_WEB --repo "$REPO" --body "$WEB_ID"
 gh variable set API_URL --repo "$REPO" --body "$API_URL"
 gh variable set WEB_URL --repo "$REPO" --body "$WEB_URL"
-if [ -n "${NEON_API_KEY:-}" ] && [ -n "${NEON_PROJECT_ID:-}" ]; then
-  gh secret set NEON_API_KEY --repo "$REPO" --body "$NEON_API_KEY"
-  gh variable set NEON_PROJECT_ID --repo "$REPO" --body "$NEON_PROJECT_ID"
-  echo "  ✔ Neon: mỗi PR sẽ có nhánh DB riêng"
-fi
 
 # ── 5. Kiểm tra database ─────────────────────────────────────────────────────
 say "Kiểm tra database"
@@ -129,10 +121,8 @@ if has_env "$API_ID" DATABASE_URL; then
 else
   DB_READY=0
   cat <<EOF
-  ⚠ Project API CHƯA có database. Làm 1 lần trên Vercel Dashboard:
-     https://vercel.com/dashboard → project "$API_PROJECT" → Storage → Create Database
-     → chọn "Neon (Serverless Postgres)" → Connect (tick Production + Preview + Development)
-     Vercel sẽ tự thêm DATABASE_URL và DATABASE_URL_UNPOOLED. Sau đó chạy lại script này.
+  ⚠ Project API CHƯA có database. Tạo MySQL online (vd TiDB Cloud Serverless, Aiven, Railway)
+     rồi chạy lại:  DATABASE_URL="mysql://..." ./scripts/vercel-setup.sh
 EOF
 fi
 has_env "$API_ID" BLOB_READ_WRITE_TOKEN && echo "  ✔ Đã có Vercel Blob (upload ảnh)" || cat <<EOF

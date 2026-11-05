@@ -18,6 +18,10 @@ const detailInclude = {
 
 type ProductDetail = Prisma.ProductGetPayload<{ include: typeof detailInclude }>;
 
+/** Cột images kiểu JSON → luôn trả về mảng chuỗi */
+export const toImages = (v: Prisma.JsonValue | null): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+
 const listInclude = {
   category: { select: { id: true, name: true, slug: true } },
   variants: {
@@ -34,6 +38,7 @@ export class ProductsService {
   private format(p: ProductDetail) {
     return {
       ...p,
+      images: toImages(p.images),
       variants: p.variants.map(({ optionValues, ...v }) => ({
         ...v,
         optionValueIds: optionValues.map((o) => o.optionValueId),
@@ -52,9 +57,9 @@ export class ProductsService {
 
     if (q.search) {
       where.OR = [
-        { name: { contains: q.search, mode: 'insensitive' } },
-        { brand: { contains: q.search, mode: 'insensitive' } },
-        { variants: { some: { OR: [{ sku: { contains: q.search, mode: 'insensitive' } }, { barcode: q.search }] } } },
+        { name: { contains: q.search } },
+        { brand: { contains: q.search } },
+        { variants: { some: { OR: [{ sku: { contains: q.search } }, { barcode: q.search }] } } },
       ];
     }
     if (q.category || q.categoryId) {
@@ -63,7 +68,7 @@ export class ProductsService {
         : await this.prisma.category.findUnique({ where: { slug: q.category! }, include: { children: true } });
       where.categoryId = { in: cat ? [cat.id, ...cat.children.map((c) => c.id)] : [-1] };
     }
-    if (q.brand) where.brand = { equals: q.brand, mode: 'insensitive' };
+    if (q.brand) where.brand = { equals: q.brand };
     if (q.minPrice !== undefined || q.maxPrice !== undefined) {
       where.minPrice = { ...(q.minPrice !== undefined && { gte: q.minPrice }), ...(q.maxPrice !== undefined && { lte: q.maxPrice }) };
     }
@@ -95,7 +100,11 @@ export class ProductsService {
       }),
       this.prisma.product.count({ where }),
     ]);
-    const mapped = items.map((p) => ({ ...p, totalStock: p.variants.reduce((s, v) => s + v.stock, 0) }));
+    const mapped = items.map((p) => ({
+      ...p,
+      images: toImages(p.images),
+      totalStock: p.variants.reduce((s, v) => s + v.stock, 0),
+    }));
     return paged(mapped, total, page, limit);
   }
 
@@ -116,7 +125,7 @@ export class ProductsService {
       where: { isActive: true, categoryId: p.categoryId, id: { not: p.id } },
       take: 8, orderBy: { soldCount: 'desc' }, include: listInclude,
     });
-    return { ...this.format(p), related };
+    return { ...this.format(p), related: related.map((r) => ({ ...r, images: toImages(r.images) })) };
   }
 
   async findById(id: number) {
@@ -155,7 +164,8 @@ export class ProductsService {
   async save(dto: SaveProductDto, userId: number, id?: number) {
     this.validate(dto);
     const slug = slugify(dto.slug || dto.name);
-    const { options, variants, ...productData } = dto;
+    const { options, variants, images, ...rest } = dto;
+    const productData = { ...rest, ...(images !== undefined && { images }) };
     const prices = variants.map((v) => v.price);
 
     const productId = await this.prisma.$transaction(async (tx) => {

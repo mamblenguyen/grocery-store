@@ -13,7 +13,7 @@ export class DashboardService {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    const [revenue, todayRevenue, orderCount, todayOrders, customers, products, byStatus, daily, topProducts, lowStock, recentOrders] =
+    const [revenue, todayRevenue, orderCount, todayOrders, customers, products, byStatus, recent, topProducts, lowStock, recentOrders] =
       await Promise.all([
         this.prisma.order.aggregate({ where: { status: 'COMPLETED' }, _sum: { total: true } }),
         this.prisma.order.aggregate({ where: { status: { not: 'CANCELLED' }, createdAt: { gte: startOfToday } }, _sum: { total: true } }),
@@ -22,12 +22,10 @@ export class DashboardService {
         this.prisma.user.count({ where: { role: 'CUSTOMER' } }),
         this.prisma.product.count({ where: { isActive: true } }),
         this.prisma.order.groupBy({ by: ['status'], _count: { _all: true } }),
-        this.prisma.$queryRaw<{ day: Date; revenue: bigint; orders: bigint }[]>`
-          SELECT date_trunc('day', "createdAt") AS day,
-                 COALESCE(SUM(total) FILTER (WHERE status <> 'CANCELLED'), 0)::bigint AS revenue,
-                 COUNT(*)::bigint AS orders
-          FROM "Order" WHERE "createdAt" >= ${since}
-          GROUP BY 1 ORDER BY 1`,
+        this.prisma.order.findMany({
+          where: { createdAt: { gte: since } },
+          select: { total: true, status: true, createdAt: true },
+        }),
         this.prisma.orderItem.groupBy({
           by: ['productId', 'productName'],
           where: { order: { status: { not: 'CANCELLED' } } },
@@ -35,20 +33,30 @@ export class DashboardService {
           orderBy: { _sum: { quantity: 'desc' } },
           take: 5,
         }),
-        this.prisma.$queryRaw<any[]>`
-          SELECT v.id, v.sku, v.name, v.stock, v."lowStockThreshold", p.name AS "productName"
-          FROM "ProductVariant" v JOIN "Product" p ON p.id = v."productId"
-          WHERE v."isActive" AND v.stock <= v."lowStockThreshold"
-          ORDER BY v.stock ASC LIMIT 10`,
+        this.prisma.productVariant.findMany({
+          where: { isActive: true, stock: { lte: this.prisma.productVariant.fields.lowStockThreshold } },
+          orderBy: { stock: 'asc' },
+          take: 10,
+          select: { id: true, sku: true, name: true, stock: true, lowStockThreshold: true, product: { select: { name: true } } },
+        }),
         this.prisma.order.findMany({ orderBy: { createdAt: 'desc' }, take: 8 }),
       ]);
 
-    // Lấp đủ các ngày không có đơn
+    // Gom doanh thu theo ngày (giờ địa phương của server), lấp đủ các ngày không có đơn
+    const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const buckets = new Map<string, { revenue: number; orders: number }>();
+    for (const o of recent) {
+      const k = dayKey(o.createdAt);
+      const b = buckets.get(k) ?? { revenue: 0, orders: 0 };
+      b.orders += 1;
+      if (o.status !== 'CANCELLED') b.revenue += o.total;
+      buckets.set(k, b);
+    }
     const chart = Array.from({ length: days }, (_, i) => {
       const d = new Date(since);
       d.setDate(since.getDate() + i);
-      const row = daily.find((r) => new Date(r.day).toDateString() === d.toDateString());
-      return { date: d.toISOString().slice(0, 10), revenue: Number(row?.revenue ?? 0), orders: Number(row?.orders ?? 0) };
+      const k = dayKey(d);
+      return { date: k, ...(buckets.get(k) ?? { revenue: 0, orders: 0 }) };
     });
 
     return {
@@ -65,7 +73,7 @@ export class DashboardService {
       topProducts: topProducts.map((t) => ({
         productId: t.productId, productName: t.productName, quantity: t._sum.quantity ?? 0, revenue: t._sum.total ?? 0,
       })),
-      lowStock,
+      lowStock: lowStock.map(({ product, ...v }) => ({ ...v, productName: product.name })),
       recentOrders,
     };
   }

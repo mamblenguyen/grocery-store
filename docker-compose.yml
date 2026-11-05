@@ -1,15 +1,16 @@
+# Tuỳ chọn: bật MySQL bằng Docker nếu máy chưa có (npm run db:up)
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: grocery-postgres
+  mysql:
+    image: mysql:8.0
+    container_name: grocery-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: grocery
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: grocery
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - mysqldata:/var/lib/mysql
 volumes:
-  pgdata:
+  mysqldata:

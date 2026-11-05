@@ -113,8 +113,8 @@ export class OrdersService {
       }),
       ...(q.search && {
         OR: [
-          { code: { contains: q.search, mode: 'insensitive' } },
-          { customerName: { contains: q.search, mode: 'insensitive' } },
+          { code: { contains: q.search } },
+          { customerName: { contains: q.search } },
           { phone: { contains: q.search } },
         ],
       }),

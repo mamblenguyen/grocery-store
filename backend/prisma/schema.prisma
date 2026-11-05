@@ -5,11 +5,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  // Neon: DATABASE_URL = chuỗi kết nối qua pooler (dùng lúc chạy app serverless)
-  //       DATABASE_URL_UNPOOLED = kết nối trực tiếp (dùng cho prisma migrate)
-  url       = env("DATABASE_URL")
-  directUrl = env("DATABASE_URL_UNPOOLED")
+  provider = "mysql"
+  // vd: mysql://root:root@localhost:3306/grocery
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -55,7 +53,7 @@ model User {
   password  String
   fullName  String
   phone     String?
-  address   String?
+  address   String?  @db.Text
   role      Role     @default(CUSTOMER)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -69,8 +67,8 @@ model Category {
   id          Int        @id @default(autoincrement())
   name        String
   slug        String     @unique
-  description String?
-  image       String?
+  description String?    @db.Text
+  image       String?    @db.VarChar(1000)
   sortOrder   Int        @default(0)
   isActive    Boolean    @default(true)
   parentId    Int?
@@ -82,20 +80,20 @@ model Category {
 }
 
 model Product {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   name        String
-  slug        String   @unique
-  description String?
+  slug        String    @unique
+  description String?   @db.Text
   brand       String?
-  unit        String?  // đơn vị tính: gói, chai, hộp, kg...
-  thumbnail   String?
-  images      String[] @default([])
-  isActive    Boolean  @default(true)
-  isFeatured  Boolean  @default(false)
+  unit        String? // đơn vị tính: gói, chai, hộp, kg...
+  thumbnail   String?   @db.VarChar(1000)
+  images      Json? // mảng URL ảnh: ["https://...", ...]
+  isActive    Boolean   @default(true)
+  isFeatured  Boolean   @default(false)
   // Giá thấp nhất / cao nhất trong các biến thể (denormalized để lọc & sắp xếp)
-  minPrice    Int      @default(0)
-  maxPrice    Int      @default(0)
-  soldCount   Int      @default(0)
+  minPrice    Int       @default(0)
+  maxPrice    Int       @default(0)
+  soldCount   Int       @default(0)
   categoryId  Int?
   category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
@@ -130,20 +128,20 @@ model ProductOptionValue {
 }
 
 model ProductVariant {
-  id                Int      @id @default(autoincrement())
+  id                Int     @id @default(autoincrement())
   productId         Int
-  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  sku               String   @unique
+  product           Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku               String  @unique
   barcode           String?
-  name              String   // "1kg / Cay" – tự sinh từ option values
+  name              String // "1kg / Cay" – tự sinh từ option values
   price             Int
-  compareAtPrice    Int?     // giá gốc (gạch ngang)
-  costPrice         Int?     // giá nhập
-  stock             Int      @default(0)
-  lowStockThreshold Int      @default(5)
-  image             String?
-  isActive          Boolean  @default(true)
-  position          Int      @default(0)
+  compareAtPrice    Int? // giá gốc (gạch ngang)
+  costPrice         Int? // giá nhập
+  stock             Int     @default(0)
+  lowStockThreshold Int     @default(5)
+  image             String? @db.VarChar(1000)
+  isActive          Boolean @default(true)
+  position          Int     @default(0)
 
   optionValues  VariantOptionValue[]
   orderItems    OrderItem[]
@@ -171,8 +169,8 @@ model Order {
   user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   customerName  String
   phone         String
-  address       String
-  note          String?
+  address       String        @db.Text
+  note          String?       @db.Text
   status        OrderStatus   @default(PENDING)
   paymentMethod PaymentMethod @default(COD)
   paymentStatus PaymentStatus @default(UNPAID)
@@ -181,7 +179,7 @@ model Order {
   shippingFee   Int           @default(0)
   total         Int
   couponCode    String?
-  cancelReason  String?
+  cancelReason  String?       @db.Text
   items         OrderItem[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -201,7 +199,7 @@ model OrderItem {
   productName String
   variantName String
   sku         String
-  image       String?
+  image       String?         @db.VarChar(1000)
   price       Int
   quantity    Int
   total       Int
@@ -210,7 +208,7 @@ model OrderItem {
 model Coupon {
   id            Int          @id @default(autoincrement())
   code          String       @unique
-  description   String?
+  description   String?      @db.Text
   type          DiscountType @default(PERCENT)
   value         Int
   minOrderValue Int          @default(0)
@@ -225,16 +223,16 @@ model Coupon {
 }
 
 model InventoryLog {
-  id        Int             @id @default(autoincrement())
-  variantId Int
-  variant   ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  change    Int
+  id         Int             @id @default(autoincrement())
+  variantId  Int
+  variant    ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  change     Int
   stockAfter Int
-  reason    InventoryReason
-  note      String?
-  userId    Int?
-  user      User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt DateTime        @default(now())
+  reason     InventoryReason
+  note       String?         @db.Text
+  userId     Int?
+  user       User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt  DateTime        @default(now())
 
   @@index([variantId])
 }

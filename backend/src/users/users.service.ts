@@ -18,8 +18,8 @@ export class UsersService {
       ...(q.role && { role: q.role }),
       ...(q.search && {
         OR: [
-          { email: { contains: q.search, mode: 'insensitive' } },
-          { fullName: { contains: q.search, mode: 'insensitive' } },
+          { email: { contains: q.search } },
+          { fullName: { contains: q.search } },
           { phone: { contains: q.search } },
         ],
       }),

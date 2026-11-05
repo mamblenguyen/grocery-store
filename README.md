@@ -1,6 +1,6 @@
 # 🛒 Tạp Hoá Xanh – Hệ thống quản lý & bán hàng tạp hoá
 
-Dự án full-stack: **NestJS + Prisma + PostgreSQL** (backend) và **Next.js 15 + Tailwind CSS 4** (frontend), gồm **trang khách hàng** và **trang quản trị**. Sản phẩm hỗ trợ **nhiều biến thể** (vd: Khối lượng × Hương vị), mỗi biến thể có SKU, giá và tồn kho riêng.
+Dự án full-stack: **NestJS + Prisma + MySQL** (backend) và **Next.js 15 + Tailwind CSS 4** (frontend), gồm **trang khách hàng** và **trang quản trị**. Sản phẩm hỗ trợ **nhiều biến thể** (vd: Khối lượng × Hương vị), mỗi biến thể có SKU, giá và tồn kho riêng.
 
 ```
 grocery-store/
@@ -20,7 +20,7 @@ grocery-store/
 │   └── src/app/
 │       ├── (shop)/     # Trang khách hàng
 │       └── admin/      # Trang quản trị
-├── docker-compose.yml  # PostgreSQL 16
+├── docker-compose.yml  # MySQL 8 (tuỳ chọn, nếu máy chưa có MySQL)
 ├── .github/workflows/  # CI/CD: test, deploy production & preview lên Vercel
 ├── scripts/            # dev.mjs (chạy local 1 lệnh), vercel-setup.sh, smoke-test.sh
 ├── package.json        # npm run dev
@@ -65,11 +65,11 @@ Ví dụ *Mì Hảo Hảo*: thuộc tính `Hương vị` × `Quy cách` → 6 bi
 
 ## ☁️ Deploy tự động (CI/CD Vercel)
 
-GitHub Actions sẽ test → migrate DB (Neon Postgres) → deploy API + Web lên Vercel mỗi khi push `main`. Mỗi Pull Request có link preview và nhánh DB riêng. Xem hướng dẫn cài đặt một lần trong **[DEPLOY.md](DEPLOY.md)**.
+GitHub Actions sẽ test → migrate DB MySQL → deploy API + Web lên Vercel mỗi khi push `main`. Mỗi Pull Request có link preview. Xem hướng dẫn cài đặt một lần trong **[DEPLOY.md](DEPLOY.md)**.
 
 ## 🚀 Chạy ở local – chỉ 1 lệnh
 
-Yêu cầu: **Node.js ≥ 20** và **PostgreSQL** đang chạy (DB có sẵn, hoặc `npm run db:up` để bật bằng Docker).
+Yêu cầu: **Node.js ≥ 20** và **MySQL 8** đang chạy (mặc định `root:root@localhost:3306`, hoặc `npm run db:up` để bật bằng Docker).
 
 ```bash
 npm run dev
@@ -77,7 +77,7 @@ npm run dev
 
 Lệnh này tự động:
 1. Tạo `backend/.env` và `frontend/.env.local` từ file mẫu (nếu chưa có)
-2. Kiểm tra kết nối PostgreSQL và port 3000/4000 còn trống
+2. Kiểm tra kết nối MySQL và port 3000/4000 còn trống
 3. `npm install` cho backend & frontend (lần đầu)
 4. Tạo database nếu chưa có → chạy migration → seed dữ liệu mẫu (chỉ khi DB trống)
 5. Chạy song song **API** (NestJS, tự reload) và **Web** (Next.js), log có tiền tố `[api]` / `[web]`. Nhấn **Ctrl+C** để dừng cả hai.
@@ -88,10 +88,10 @@ Lệnh này tự động:
 | 🛠 Quản trị | http://localhost:3000/admin |
 | 🔌 API | http://localhost:4000/api |
 
-**PostgreSQL ở port / tài khoản khác mặc định** (`postgres:postgres@localhost:5432/grocery`):
+**MySQL ở port / tài khoản khác mặc định** (`root:root@localhost:3306/grocery`):
 ```bash
-npm run dev -- --db-port=5433
-npm run dev -- --db-url="postgresql://USER:PASS@localhost:5433/grocery?schema=public"
+npm run dev -- --db-port=3307
+npm run dev -- --db-url="mysql://USER:PASS@localhost:3306/grocery"
 ```
 Giá trị được lưu vào `backend/.env`, các lần sau chỉ cần `npm run dev`.
 
@@ -146,5 +146,5 @@ Payload tạo sản phẩm có biến thể:
 
 ## ⚙️ Biến môi trường
 
-**backend/.env**: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `SHIPPING_FEE`, `FREE_SHIPPING_THRESHOLD`, `BLOB_READ_WRITE_TOKEN`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`
+**backend/.env**: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `SHIPPING_FEE`, `FREE_SHIPPING_THRESHOLD`, `BLOB_READ_WRITE_TOKEN`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`
 **frontend/.env.local**: `NEXT_PUBLIC_API_URL`

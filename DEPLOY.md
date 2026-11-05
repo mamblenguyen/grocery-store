@@ -4,18 +4,17 @@ Sau khi cài đặt **một lần**, mọi thứ diễn ra tự động bằng G
 
 | Sự kiện | Việc được làm tự động |
 |---|---|
-| Mở / cập nhật Pull Request | Test → tạo **nhánh DB Neon riêng** `preview/pr-<số>` (copy dữ liệu từ production) → migrate → deploy **API + Web preview** → comment link vào PR |
+| Mở / cập nhật Pull Request | Test → deploy **Web preview** (gọi API production) → comment link vào PR |
 | Merge / push lên `main` | Test → `prisma migrate deploy` lên **DB production** → seed nếu DB trống → deploy **API + Web production** → smoke test |
-| Đóng / merge PR | Xoá nhánh DB của PR |
 
 ```
                     GitHub Actions (.github/workflows/ci-cd.yml)
    push main ──► test ──► migrate DB ──► vercel build/deploy API ──► vercel build/deploy Web
-                  │         (Neon)          grocery-store-api           grocery-store-web
+                  │         (MySQL)         grocery-store-api           grocery-store-web
                   │                         NestJS (Serverless)         Next.js
-                  └── Postgres trong CI: kiểm tra migration, build, smoke test đặt hàng
+                  └── MySQL trong CI: kiểm tra migration, build, smoke test đặt hàng
 
-   Trình duyệt ──► grocery-store-web.vercel.app ──fetch──► grocery-store-api.vercel.app/api ──► Neon Postgres
+   Trình duyệt ──► grocery-store-web.vercel.app ──fetch──► grocery-store-api.vercel.app/api ──► MySQL
                                                                     └──► Vercel Blob (ảnh upload)
 ```
 
@@ -39,25 +38,17 @@ Script sẽ:
 - Sinh **tài khoản admin production** với mật khẩu ngẫu nhiên và in ra màn hình. **Hãy lưu lại.**
 - Ghi GitHub Secrets/Variables cho repo.
 
-### 1.3 Gắn Database (Neon Postgres) – bấm vài nút trên Vercel
-1. Vào Vercel → project **grocery-store-api** → tab **Storage** → **Create Database** → chọn **Neon** → **Continue**.
-2. Ở bước Connect, tick **Production, Preview, Development** → Connect.
-   Vercel tự thêm `DATABASE_URL` (qua pooler) và `DATABASE_URL_UNPOOLED` (kết nối trực tiếp, dùng cho migrate).
-3. (Nên làm) Cũng trong **Storage** → **Create** → **Blob** → Connect với `grocery-store-api`.
-   Vercel tự thêm `BLOB_READ_WRITE_TOKEN` để lưu ảnh upload. Serverless không có ổ đĩa lâu dài.
-4. Chạy lại `./scripts/vercel-setup.sh` để kiểm tra (hiện ✔).
-
-> Không muốn dùng Marketplace? Tạo DB ở nơi khác (Neon, Supabase…) rồi chạy:
-> `DATABASE_URL=... DATABASE_URL_UNPOOLED=... ./scripts/vercel-setup.sh`
-
-### 1.4 (Tuỳ chọn) DB riêng cho mỗi Pull Request
-1. Mở https://console.neon.tech → project Neon vừa tạo → **Settings** → copy **Project ID**.
-2. **Account settings → API keys** → tạo API key.
-3. Chạy:
+### 1.3 Database MySQL online
+Vercel không chạy được MySQL ở máy bạn, nên production cần một MySQL online, ví dụ **TiDB Cloud Serverless** (miễn phí, tương thích MySQL), **Aiven for MySQL** hoặc **Railway**.
+1. Tạo database và copy chuỗi kết nối dạng `mysql://USER:PASS@HOST:PORT/grocery`. TiDB/Aiven cần thêm `?sslaccept=strict`.
+2. Chạy lại script để ghi biến `DATABASE_URL` cho project API:
 ```bash
-NEON_API_KEY=xxx NEON_PROJECT_ID=yyy ./scripts/vercel-setup.sh
+DATABASE_URL="mysql://USER:PASS@HOST:PORT/grocery?sslaccept=strict" ./scripts/vercel-setup.sh
 ```
-Nếu bỏ qua bước này, preview của PR chỉ deploy Web và dùng API production.
+3. (Nên làm) Vercel → project **grocery-store-api** → **Storage** → **Create** → **Blob** → Connect.
+   Vercel tự thêm `BLOB_READ_WRITE_TOKEN` để lưu ảnh upload. Serverless không có ổ đĩa lâu dài.
+
+> Mẹo: function serverless mở nhiều kết nối. Nếu nhà cung cấp giới hạn số kết nối, thêm `&connection_limit=1` vào cuối `DATABASE_URL`.
 
 ### 1.5 Deploy lần đầu
 Push lên `main`, hoặc vào GitHub → **Actions → CI/CD → Run workflow**.
@@ -75,10 +66,7 @@ Script đã tạo sẵn. Nếu muốn tự nhập: **Settings → Secrets and va
 | Secret | `VERCEL_PROJECT_ID_WEB` | ✅ | `projectId` của project Web |
 | Variable | `API_URL` | ✅ | vd `https://grocery-store-api.vercel.app` |
 | Variable | `WEB_URL` | | vd `https://grocery-store-web.vercel.app` |
-| Secret | `NEON_API_KEY` | | Để tạo DB riêng cho PR |
-| Variable | `NEON_PROJECT_ID` | | ID project Neon |
-| Variable | `NEON_DATABASE` / `NEON_ROLE` | | Mặc định `neondb` / `neondb_owner` |
-| Secret | `DATABASE_URL`, `DATABASE_URL_UNPOOLED` | | Chỉ cần nếu biến trên Vercel đặt kiểu *Sensitive* (CI không đọc được) |
+| Secret | `DATABASE_URL` | | Chỉ cần nếu biến trên Vercel đặt kiểu *Sensitive* (CI không đọc được) |
 
 Khi chưa có secrets Vercel, workflow vẫn chạy job **test** và bỏ qua deploy, kèm cảnh báo.
 
@@ -88,7 +76,7 @@ Khi chưa có secrets Vercel, workflow vẫn chạy job **test** và bỏ qua de
 
 | Biến | Nguồn |
 |---|---|
-| `DATABASE_URL`, `DATABASE_URL_UNPOOLED` | Neon integration |
+| `DATABASE_URL` | MySQL online (mục 1.3) |
 | `BLOB_READ_WRITE_TOKEN` | Blob store |
 | `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN` | setup script |
 | `SHIPPING_FEE`, `FREE_SHIPPING_THRESHOLD` | setup script, sửa được trên dashboard |
@@ -126,4 +114,4 @@ Khi merge vào `main`, migration được áp lên production **trước** khi d
 | Preview API trả trang đăng nhập Vercel | Tắt *Deployment Protection* của project API (script đã làm, kiểm tra Settings → Deployment Protection) |
 | `Thiếu GitHub variable API_URL` | Chạy setup script hoặc tạo variable thủ công |
 | Request đầu chậm 1–3 giây | Cold start của serverless, bình thường |
-| Quên mật khẩu admin production | Đăng ký tài khoản mới, rồi sửa `role` thành `ADMIN` trong Neon console (bảng `User`) |
+| Quên mật khẩu admin production | Đăng ký tài khoản mới, rồi sửa `role` thành `ADMIN` trực tiếp trong MySQL (bảng `User`) |

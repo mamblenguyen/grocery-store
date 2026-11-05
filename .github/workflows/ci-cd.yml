@@ -1,6 +1,6 @@
 name: CI/CD
 
-# - Pull request: test → tạo nhánh DB Neon riêng → deploy preview (API + Web) → comment link vào PR
+# - Pull request: test → deploy preview Web (dùng API production) → comment link vào PR
 # - Push lên main: test → migrate DB production → deploy production (API + Web) → smoke test
 on:
   push:
@@ -30,19 +30,17 @@ jobs:
     name: Test (build + migrate + smoke)
     runs-on: ubuntu-latest
     services:
-      postgres:
-        image: postgres:16-alpine
+      mysql:
+        image: mysql:8.0
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: grocery
-        ports: ['5432:5432']
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: grocery
+        ports: ['3306:3306']
         options: >-
-          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "mysqladmin ping -proot" --health-interval 5s --health-timeout 5s --health-retries 20
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grocery?schema=public
-      DATABASE_URL_UNPOOLED: postgresql://postgres:postgres@localhost:5432/grocery?schema=public
-      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grocery_shadow?schema=public
+      DATABASE_URL: mysql://root:root@127.0.0.1:3306/grocery
+      SHADOW_DATABASE_URL: mysql://root:root@127.0.0.1:3306/grocery_shadow
       JWT_SECRET: ci-secret
       CORS_ORIGIN: http://localhost:3000
     steps:
@@ -63,7 +61,6 @@ jobs:
       - name: Backend – kiểm tra migration khớp schema.prisma
         working-directory: backend
         run: |
-          PGPASSWORD=postgres createdb -h localhost -U postgres grocery_shadow
           npx prisma migrate diff \
             --from-migrations prisma/migrations \
             --to-schema-datamodel prisma/schema.prisma \
@@ -98,17 +95,13 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       vercel: ${{ steps.check.outputs.vercel }}
-      neon: ${{ steps.check.outputs.neon }}
     steps:
       - id: check
         env:
           HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID_API != '' && secrets.VERCEL_PROJECT_ID_WEB != '' }}
-          HAS_NEON: ${{ secrets.NEON_API_KEY != '' && vars.NEON_PROJECT_ID != '' }}
         run: |
           echo "vercel=$HAS_VERCEL" >> "$GITHUB_OUTPUT"
-          echo "neon=$HAS_NEON" >> "$GITHUB_OUTPUT"
           [ "$HAS_VERCEL" = "true" ] || echo "::warning::Chưa cấu hình secrets Vercel → bỏ qua deploy. Xem DEPLOY.md (chạy scripts/vercel-setup.sh)."
-          [ "$HAS_NEON" = "true" ] || echo "::notice::Chưa cấu hình NEON_API_KEY / NEON_PROJECT_ID → PR preview sẽ dùng API production (không tạo DB riêng)."
 
   # ───────────────────────── 2. DEPLOY PRODUCTION ─────────────────────────
   deploy-production:
@@ -147,15 +140,13 @@ jobs:
       - name: API – migrate database production
         working-directory: backend
         env:
-          # Tuỳ chọn: ghi đè bằng GitHub secrets nếu biến trên Vercel là "Sensitive" (không pull được)
+          # Tuỳ chọn: ghi đè bằng GitHub secret nếu biến trên Vercel là "Sensitive" (không pull được)
           OVERRIDE_DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          OVERRIDE_DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: |
           set -a; . .vercel/.env.production.local; set +a
           export DATABASE_URL="${OVERRIDE_DATABASE_URL:-${DATABASE_URL:-}}"
-          export DATABASE_URL_UNPOOLED="${OVERRIDE_DATABASE_URL_UNPOOLED:-${DATABASE_URL_UNPOOLED:-$DATABASE_URL}}"
-          [ -n "$DATABASE_URL" ] || { echo "::error::Project API trên Vercel chưa có DATABASE_URL. Gắn Neon Postgres (Storage → Neon) vào project. Xem DEPLOY.md"; exit 1; }
-          echo "::add-mask::$DATABASE_URL"; echo "::add-mask::$DATABASE_URL_UNPOOLED"
+          [ -n "$DATABASE_URL" ] || { echo "::error::Project API trên Vercel chưa có DATABASE_URL. Thêm biến DATABASE_URL (MySQL) vào project. Xem DEPLOY.md"; exit 1; }
+          echo "::add-mask::$DATABASE_URL"
           npm ci
           npx prisma migrate deploy
           npx prisma db seed   # chỉ seed khi DB trống
@@ -232,51 +223,12 @@ jobs:
             frontend/package-lock.json
       - run: npm i -g ${{ env.VERCEL_CLI }}
 
-      # Nhánh DB riêng cho PR (copy dữ liệu từ nhánh chính của Neon), xoá khi PR đóng
-      - name: DB – tạo nhánh Neon cho PR
-        id: db
-        if: needs.config.outputs.neon == 'true'
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-          branch_name: preview/pr-${{ github.event.number }}
-          database: ${{ vars.NEON_DATABASE || 'neondb' }}
-          role: ${{ vars.NEON_ROLE || 'neondb_owner' }}
-
-      - name: DB – migrate nhánh preview
-        if: needs.config.outputs.neon == 'true'
-        working-directory: backend
-        env:
-          DATABASE_URL: ${{ steps.db.outputs.db_url_pooled }}
-          DATABASE_URL_UNPOOLED: ${{ steps.db.outputs.db_url }}
-        run: |
-          npm ci
-          npx prisma migrate deploy
-          npx prisma db seed
-
-      - name: API – build & deploy preview
-        id: api
-        if: needs.config.outputs.neon == 'true'
-        working-directory: backend
-        env:
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
-          DB_POOLED: ${{ steps.db.outputs.db_url_pooled }}
-          DB_DIRECT: ${{ steps.db.outputs.db_url }}
-        run: |
-          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
-          vercel build --token="$VERCEL_TOKEN"
-          url=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" \
-            --env DATABASE_URL="$DB_POOLED" --env DATABASE_URL_UNPOOLED="$DB_DIRECT")
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          ../scripts/smoke-test.sh "$url"
-
       - name: Web – build & deploy preview
         id: web
         working-directory: frontend
         env:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
-          API_BASE: ${{ steps.api.outputs.url || vars.API_URL }}
+          API_BASE: ${{ vars.API_URL }}
         run: |
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
           f=.vercel/.env.preview.local
@@ -290,8 +242,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           WEB: ${{ steps.web.outputs.url }}
-          API: ${{ steps.api.outputs.url || vars.API_URL }}
-          OWN_DB: ${{ needs.config.outputs.neon }}
+          API: ${{ vars.API_URL }}
         with:
           script: |
             const marker = '<!-- vercel-preview -->';
@@ -302,7 +253,6 @@ jobs:
               `| Cửa hàng | ${process.env.WEB} |`,
               `| Quản trị | ${process.env.WEB}/admin |`,
               `| API | ${process.env.API}/api/health |`,
-              `| Database | ${process.env.OWN_DB === 'true' ? `Nhánh Neon riêng \`preview/pr-${context.issue.number}\`` : '⚠️ Dùng API production'} |`,
               '', `_Commit ${context.sha.slice(0, 7)}_`,
             ].join('\n');
             const { data: comments } = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
