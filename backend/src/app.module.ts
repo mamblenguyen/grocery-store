@@ -9,6 +9,7 @@ import { CouponsModule } from './coupons/coupons.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { UploadModule } from './upload/upload.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -23,5 +24,6 @@ import { UploadModule } from './upload/upload.module';
     DashboardModule,
     UploadModule,
   ],
+  controllers: [HealthController],
 })
 export class AppModule {}

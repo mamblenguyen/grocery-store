@@ -1,0 +1,25 @@
+name: Dọn dẹp preview
+
+# Xoá nhánh database Neon của PR khi PR được merge/đóng
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  delete-db-branch:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Kiểm tra cấu hình Neon
+        id: check
+        env:
+          HAS_NEON: ${{ secrets.NEON_API_KEY != '' && vars.NEON_PROJECT_ID != '' }}
+        run: echo "neon=$HAS_NEON" >> "$GITHUB_OUTPUT"
+
+      - name: Xoá nhánh Neon preview/pr-${{ github.event.number }}
+        if: steps.check.outputs.neon == 'true'
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: preview/pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}

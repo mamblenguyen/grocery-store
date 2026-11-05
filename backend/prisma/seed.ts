@@ -128,6 +128,13 @@ const products: Seed[] = [
 ];
 
 async function main() {
+  // An toàn cho CI/CD: chỉ seed khi DB trống, trừ khi FORCE_SEED=true (xoá sạch & seed lại)
+  const force = process.env.FORCE_SEED === 'true';
+  if (!force && (await prisma.user.count()) > 0) {
+    console.log('ℹ️  DB đã có dữ liệu → bỏ qua seed (đặt FORCE_SEED=true để seed lại từ đầu)');
+    return;
+  }
+  if (force && process.env.VERCEL_ENV === 'production') throw new Error('Không cho phép FORCE_SEED trên production');
   console.log('🌱 Seeding...');
   await prisma.inventoryLog.deleteMany();
   await prisma.orderItem.deleteMany();
@@ -137,12 +144,21 @@ async function main() {
   await prisma.coupon.deleteMany();
   await prisma.user.deleteMany();
 
-  const pwd = await bcrypt.hash('123456', 10);
-  await prisma.user.create({ data: { email: 'admin@grocery.local', password: pwd, fullName: 'Quản trị viên', role: 'ADMIN' } });
-  await prisma.user.create({ data: { email: 'staff@grocery.local', password: pwd, fullName: 'Nhân viên bán hàng', role: 'STAFF' } });
+  // Production: SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD (do scripts/vercel-setup.sh sinh ngẫu nhiên)
+  // Local/CI: dùng tài khoản demo mật khẩu 123456
+  const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@grocery.local';
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || '123456';
+  const isDemo = !process.env.SEED_ADMIN_PASSWORD;
   await prisma.user.create({
-    data: { email: 'customer@grocery.local', password: pwd, fullName: 'Nguyễn Văn A', phone: '0901234567', address: '123 Lê Lợi, Q.1, TP.HCM' },
+    data: { email: adminEmail.toLowerCase(), password: await bcrypt.hash(adminPassword, 10), fullName: 'Quản trị viên', role: 'ADMIN' },
   });
+  if (isDemo) {
+    const pwd = await bcrypt.hash('123456', 10);
+    await prisma.user.create({ data: { email: 'staff@grocery.local', password: pwd, fullName: 'Nhân viên bán hàng', role: 'STAFF' } });
+    await prisma.user.create({
+      data: { email: 'customer@grocery.local', password: pwd, fullName: 'Nguyễn Văn A', phone: '0901234567', address: '123 Lê Lợi, Q.1, TP.HCM' },
+    });
+  }
 
   const catMap: Record<string, number> = {};
   for (const [i, c] of categories.entries()) {
@@ -191,7 +207,7 @@ async function main() {
       { code: 'GIAM20K', description: 'Giảm 20k cho đơn từ 200k', type: 'FIXED', value: 20000, minOrderValue: 200000, usageLimit: 100 },
     ],
   });
-  console.log('✅ Seed xong. Admin: admin@grocery.local / 123456');
+  console.log(`✅ Seed xong. Admin: ${adminEmail}${isDemo ? ' / 123456' : ' (mật khẩu theo SEED_ADMIN_PASSWORD)'}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); }).finally(() => prisma.$disconnect());

@@ -15,12 +15,15 @@ grocery-store/
 │       ├── coupons/    # Mã giảm giá (% / số tiền, giới hạn lượt, thời gian)
 │       ├── inventory/  # Tồn kho, nhập/xuất/điều chỉnh, lịch sử kho
 │       ├── dashboard/  # Thống kê doanh thu, top bán chạy, sắp hết hàng
-│       └── upload/     # Upload ảnh (lưu tại backend/uploads)
+│       └── upload/     # Upload ảnh (Vercel Blob hoặc backend/uploads)
 ├── frontend/           # Next.js App Router (cổng 3000)
 │   └── src/app/
 │       ├── (shop)/     # Trang khách hàng
 │       └── admin/      # Trang quản trị
-└── docker-compose.yml  # PostgreSQL 16
+├── docker-compose.yml  # PostgreSQL 16
+├── .github/workflows/  # CI/CD: test, deploy production & preview lên Vercel
+├── scripts/            # vercel-setup.sh (cài đặt 1 lần), smoke-test.sh
+└── DEPLOY.md           # Hướng dẫn triển khai
 ```
 
 ## ✨ Tính năng
@@ -59,7 +62,11 @@ Product ─┬─ ProductOption (Khối lượng) ── ProductOptionValue (500
 ```
 Ví dụ *Mì Hảo Hảo*: thuộc tính `Hương vị` × `Quy cách` → 6 biến thể, mỗi biến thể có SKU, giá và tồn kho riêng.
 
-## 🚀 Cài đặt & chạy
+## ☁️ Deploy tự động (CI/CD Vercel)
+
+GitHub Actions sẽ test → migrate DB (Neon Postgres) → deploy API + Web lên Vercel mỗi khi push `main`. Mỗi Pull Request có link preview và nhánh DB riêng. Xem hướng dẫn cài đặt một lần trong **[DEPLOY.md](DEPLOY.md)**.
+
+## 🚀 Cài đặt & chạy (local)
 
 Yêu cầu: Node.js ≥ 20, Docker (hoặc PostgreSQL có sẵn).
 
@@ -72,7 +79,7 @@ cd backend
 cp .env.example .env
 npm install
 npx prisma migrate dev     # tạo bảng
-npm run db:seed            # dữ liệu mẫu
+npm run db:seed            # dữ liệu mẫu (chỉ khi DB trống; FORCE_SEED=true npm run db:seed để làm lại)
 npm run start:dev          # http://localhost:4000/api
 
 # 3. Frontend (terminal khác)
@@ -110,6 +117,7 @@ Mã giảm giá mẫu: `WELCOME10` (giảm 10%, tối đa 50k, đơn từ 100k),
 | GET/PATCH | `/api/admin/orders`, `/api/admin/orders/:id/status`, `/:id/payment` | Quản lý đơn |
 | GET/POST | `/api/admin/inventory`, `/logs`, `/adjust` | Kho hàng |
 | GET | `/api/admin/dashboard?days=7` | Thống kê |
+| GET | `/api/health` | Kiểm tra API + kết nối DB |
 | GET/PATCH | `/api/admin/users` | Người dùng (ADMIN) |
 | POST | `/api/admin/upload` (multipart `files`) | Upload ảnh |
 
@@ -130,5 +138,5 @@ Payload tạo sản phẩm có biến thể:
 
 ## ⚙️ Biến môi trường
 
-**backend/.env**: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `SHIPPING_FEE`, `FREE_SHIPPING_THRESHOLD`
+**backend/.env**: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `SHIPPING_FEE`, `FREE_SHIPPING_THRESHOLD`, `BLOB_READ_WRITE_TOKEN`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`
 **frontend/.env.local**: `NEXT_PUBLIC_API_URL`

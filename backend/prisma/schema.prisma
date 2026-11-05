@@ -1,10 +1,15 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "rhel-openssl-3.0.x" = runtime của Vercel Functions (build trên GitHub Actions rồi deploy --prebuilt)
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Neon: DATABASE_URL = chuỗi kết nối qua pooler (dùng lúc chạy app serverless)
+  //       DATABASE_URL_UNPOOLED = kết nối trực tiếp (dùng cho prisma migrate)
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 enum Role {
