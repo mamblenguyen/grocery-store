@@ -1,4 +1,5 @@
 'use client';
+import { useStoreHref } from '@/context/store';
 import { SlidersHorizontal, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -61,6 +62,7 @@ function Filters({ params, set, cats, brands }: { params: Record<string, string>
 }
 
 function ProductsInner() {
+  const sh = useStoreHref();
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -98,7 +100,7 @@ function ProductsInner() {
 
   return (
     <div className="container-x py-6">
-      <nav className="mb-4 text-sm text-slate-400"><Link href="/" className="hover:text-brand-700">Trang chủ</Link> / <span className="text-slate-600">{current?.name ?? 'Sản phẩm'}</span></nav>
+      <nav className="mb-4 text-sm text-slate-400"><Link href={sh('/')} className="hover:text-brand-700">Trang chủ</Link> / <span className="text-slate-600">{current?.name ?? 'Sản phẩm'}</span></nav>
       <div className="flex gap-8">
         <aside className="hidden w-64 shrink-0 lg:block"><div className="card sticky top-36"><Filters params={params} set={set} cats={cats} brands={brands} /></div></aside>
         <div className="min-w-0 flex-1">

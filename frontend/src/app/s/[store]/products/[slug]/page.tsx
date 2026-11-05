@@ -1,4 +1,5 @@
 'use client';
+import { useStoreHref } from '@/context/store';
 import { Check, ChevronRight, Heart, ShieldCheck, ShoppingCart, Truck, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -105,6 +106,7 @@ function Reviews({ product, onChanged }: { product: Product; onChanged: () => vo
 }
 
 export default function ProductDetailPage() {
+  const sh = useStoreHref();
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
   const cart = useCart();
@@ -147,7 +149,7 @@ export default function ProductDetailPage() {
     return m.some((x) => x.stock > 0) ? 'ok' : 'out';
   };
 
-  if (error) return <div className="container-x py-20"><Empty text={error}><Link href="/products" className="btn-primary">Quay lại cửa hàng</Link></Empty></div>;
+  if (error) return <div className="container-x py-20"><Empty text={error}><Link href={sh('/products')} className="btn-primary">Quay lại cửa hàng</Link></Empty></div>;
   if (!p) return <Spinner />;
 
   const images = [...new Set([variant?.image, p.thumbnail, ...(p.images ?? [])].filter(Boolean) as string[])];
@@ -160,15 +162,15 @@ export default function ProductDetailPage() {
     const inCart = cart.items.find((i) => i.variantId === variant.id)?.quantity ?? 0;
     if (inCart + qty > variant.stock) return toast(`Chỉ còn ${variant.stock} sản phẩm (giỏ đã có ${inCart})`, 'error');
     cart.add({ variantId: variant.id, productId: p.id, slug: p.slug, productName: p.name, variantName: variant.name, image: variant.image || p.thumbnail, price: variant.price, stock: variant.stock }, qty);
-    if (buyNow) router.push('/checkout');
+    if (buyNow) router.push(sh('/checkout'));
     else { toast('Đã thêm vào giỏ hàng'); cart.setOpen(true); }
   };
 
   return (
     <div className="container-x py-6">
       <nav className="mb-5 flex flex-wrap items-center gap-1 text-sm text-slate-400">
-        <Link href="/" className="hover:text-brand-700">Trang chủ</Link><ChevronRight className="h-3.5 w-3.5" />
-        {p.category && <><Link href={`/products?category=${p.category.slug}`} className="hover:text-brand-700">{p.category.name}</Link><ChevronRight className="h-3.5 w-3.5" /></>}
+        <Link href={sh('/')} className="hover:text-brand-700">Trang chủ</Link><ChevronRight className="h-3.5 w-3.5" />
+        {p.category && <><Link href={sh(`/products?category=${p.category.slug}`)} className="hover:text-brand-700">{p.category.name}</Link><ChevronRight className="h-3.5 w-3.5" /></>}
         <span className="truncate text-slate-600">{p.name}</span>
       </nav>
 
@@ -192,7 +194,7 @@ export default function ProductDetailPage() {
         </div>
 
         <div className="flex flex-col">
-          {p.brand && <Link href={`/products?brand=${encodeURIComponent(p.brand)}`} className="w-fit text-sm font-semibold tracking-wide text-brand-700 uppercase">{p.brand}</Link>}
+          {p.brand && <Link href={sh(`/products?brand=${encodeURIComponent(p.brand)}`)} className="w-fit text-sm font-semibold tracking-wide text-brand-700 uppercase">{p.brand}</Link>}
           <h1 className="mt-1 text-2xl leading-tight font-bold sm:text-3xl">{p.name}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500">
             {p.ratingCount > 0 ? <button onClick={() => { setTab('reviews'); document.getElementById('tabs')?.scrollIntoView({ behavior: 'smooth' }); }} className="flex items-center gap-1.5"><Stars value={p.ratingAvg} /><span className="underline">{p.ratingCount} đánh giá</span></button> : <span>Chưa có đánh giá</span>}

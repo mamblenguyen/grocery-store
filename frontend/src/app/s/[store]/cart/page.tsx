@@ -1,4 +1,5 @@
 'use client';
+import { useStoreHref } from '@/context/store';
 import { ArrowLeft, ShoppingBag, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -10,6 +11,7 @@ import { api, imageUrl } from '@/lib/api';
 import { money } from '@/lib/format';
 
 export default function CartPage() {
+  const sh = useStoreHref();
   const { items, update, remove, subtotal, clear } = useCart();
   const { settings } = useSettings();
   const [error, setError] = useState('');
@@ -22,7 +24,7 @@ export default function CartPage() {
   }, [JSON.stringify(items.map((i) => [i.variantId, i.quantity]))]);
 
   if (!items.length)
-    return <div className="container-x py-10"><div className="card"><Empty icon={<ShoppingBag className="h-7 w-7" />} text="Giỏ hàng của bạn đang trống"><Link href="/products" className="btn-primary">Tiếp tục mua sắm</Link></Empty></div></div>;
+    return <div className="container-x py-10"><div className="card"><Empty icon={<ShoppingBag className="h-7 w-7" />} text="Giỏ hàng của bạn đang trống"><Link href={sh('/products')} className="btn-primary">Tiếp tục mua sắm</Link></Empty></div></div>;
 
   const shipping = subtotal >= settings.freeShippingThreshold ? 0 : settings.shippingFee;
   const belowMin = settings.minOrderValue > 0 && subtotal < settings.minOrderValue;
@@ -40,7 +42,7 @@ export default function CartPage() {
                 <img src={imageUrl(i.image)} alt="" className="h-24 w-24 shrink-0 rounded-xl border border-slate-100 object-cover" />
                 <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
                   <div className="min-w-0 flex-1">
-                    <Link href={`/products/${i.slug}`} className="font-semibold text-ink hover:text-brand-700">{i.productName}</Link>
+                    <Link href={sh(`/products/${i.slug}`)} className="font-semibold text-ink hover:text-brand-700">{i.productName}</Link>
                     <div className="text-sm text-slate-400">{i.variantName}</div>
                     <div className="mt-1 font-semibold text-brand-700">{money(i.price)}</div>
                   </div>
@@ -52,7 +54,7 @@ export default function CartPage() {
             ))}
           </div>
           <div className="flex justify-between border-t border-slate-100 p-5">
-            <Link href="/products" className="btn-ghost"><ArrowLeft className="h-4 w-4" /> Tiếp tục mua sắm</Link>
+            <Link href={sh('/products')} className="btn-ghost"><ArrowLeft className="h-4 w-4" /> Tiếp tục mua sắm</Link>
             <button onClick={() => confirm('Xoá toàn bộ giỏ hàng?') && clear()} className="btn-ghost text-red-600">Xoá giỏ hàng</button>
           </div>
         </div>
@@ -64,7 +66,7 @@ export default function CartPage() {
             <div className="flex justify-between text-sm"><span>Phí giao hàng</span><span className="font-medium text-ink">{shipping ? money(shipping) : 'Miễn phí'}</span></div>
             <div className="flex justify-between border-t border-slate-100 pt-3 text-lg font-bold"><span>Tổng cộng</span><span className="text-brand-700">{money(subtotal + shipping)}</span></div>
             {belowMin && <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Đơn tối thiểu {money(settings.minOrderValue)}</div>}
-            <Link href="/checkout" className={`btn-primary btn-lg w-full ${error || belowMin ? 'pointer-events-none opacity-50' : ''}`}>Tiến hành thanh toán</Link>
+            <Link href={sh('/checkout')} className={`btn-primary btn-lg w-full ${error || belowMin ? 'pointer-events-none opacity-50' : ''}`}>Tiến hành thanh toán</Link>
             <p className="text-center text-xs text-slate-400">Mã giảm giá được áp dụng ở bước thanh toán</p>
           </div>
         </div>

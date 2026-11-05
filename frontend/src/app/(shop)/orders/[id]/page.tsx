@@ -1,5 +1,5 @@
 'use client';
-import { ArrowLeft, CalendarDays, CreditCard, MapPin, PartyPopper, Printer, RefreshCw, StickyNote } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CreditCard, MapPin, PartyPopper, Printer, RefreshCw, StickyNote, Store } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
@@ -8,11 +8,11 @@ import { AccountShell } from '@/components/shop/AccountShell';
 import { BankTransferBox } from '@/components/shop/BankTransferBox';
 import { useToast } from '@/components/Toast';
 import { PaymentBadge, Spinner, StatusBadge } from '@/components/ui';
-import { useCart } from '@/context/cart';
-import { useSettings } from '@/context/settings';
+import { addToStoredCart, type CartItem } from '@/context/cart';
+import { FALLBACK_SETTINGS } from '@/context/settings';
 import { api, imageUrl } from '@/lib/api';
 import { dateOnly, dateTime, money, PAYMENT_METHOD } from '@/lib/format';
-import type { Order } from '@/lib/types';
+import type { Order, StoreSettings } from '@/lib/types';
 
 interface PreviewLine { variantId: number; quantity: number; productId: number; productName: string; variantName: string; image: string | null; price: number; slug: string; stock: number }
 
@@ -20,14 +20,16 @@ function OrderDetailInner() {
   const { id } = useParams<{ id: string }>();
   const success = useSearchParams().get('success');
   const toast = useToast();
-  const cart = useCart();
   const router = useRouter();
-  const { settings } = useSettings();
+  // Cài đặt của cửa hàng bán đơn này (tài khoản ngân hàng, VNPay…)
+  const [settings, setSettings] = useState<StoreSettings>(FALLBACK_SETTINGS);
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
   const [paying, setPaying] = useState(false);
 
   useEffect(() => { api<Order>(`/orders/my/${id}`).then(setOrder).catch((e) => setError(e.message)); }, [id]);
+  const slug = order?.store?.slug;
+  useEffect(() => { if (slug) api<StoreSettings>('/settings', { headers: { 'X-Store': slug } }).then(setSettings).catch(() => {}); }, [slug]);
 
   const cancel = async () => {
     const reason = prompt('Lý do huỷ đơn?');
@@ -45,16 +47,16 @@ function OrderDetailInner() {
   /** Mua lại: lấy giá & tồn kho mới nhất rồi thêm vào giỏ */
   const reorder = async () => {
     const items = order!.items!.filter((i) => i.variantId).map((i) => ({ variantId: i.variantId!, quantity: i.quantity }));
-    let added = 0;
+    if (!slug) return;
+    const add: CartItem[] = [];
     for (const it of items) {
       try {
-        const r = await api<{ lines: PreviewLine[] }>('/orders/preview', { method: 'POST', json: { items: [it] } });
+        const r = await api<{ lines: PreviewLine[] }>('/orders/preview', { method: 'POST', json: { items: [it] }, headers: { 'X-Store': slug } });
         const l = r.lines[0];
-        cart.add({ variantId: l.variantId, productId: l.productId, slug: l.slug, productName: l.productName, variantName: l.variantName, image: l.image, price: l.price, stock: l.stock }, l.quantity);
-        added++;
+        add.push({ variantId: l.variantId, productId: l.productId, slug: l.slug, productName: l.productName, variantName: l.variantName, image: l.image, price: l.price, stock: l.stock, quantity: l.quantity });
       } catch { /* hết hàng / ngừng bán → bỏ qua */ }
     }
-    if (added) { toast(`Đã thêm ${added}/${items.length} sản phẩm vào giỏ`); router.push('/cart'); }
+    if (add.length) { addToStoredCart(slug, add); toast(`Đã thêm ${add.length}/${items.length} sản phẩm vào giỏ`); router.push(`/s/${slug}/cart`); }
     else toast('Các sản phẩm trong đơn hiện đã hết hàng', 'error');
   };
 
@@ -73,14 +75,18 @@ function OrderDetailInner() {
         )}
         <div className="card">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div><h1 className="text-xl font-bold">Đơn hàng {order.code}</h1><div className="text-sm text-slate-400">Đặt lúc {dateTime(order.createdAt)}</div></div>
+            <div>
+              <h1 className="text-xl font-bold">Đơn hàng {order.code}</h1>
+              <div className="text-sm text-slate-400">Đặt lúc {dateTime(order.createdAt)}</div>
+              {order.store && <Link href={`/s/${order.store.slug}`} className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline"><Store className="h-4 w-4" />{order.store.name}</Link>}
+            </div>
             <div className="flex gap-2"><PaymentBadge status={order.paymentStatus} /><StatusBadge status={order.status} /></div>
           </div>
           <OrderTimeline status={order.status} />
           {order.cancelReason && <p className="mt-4 text-center text-sm text-slate-500">Lý do huỷ: {order.cancelReason}</p>}
         </div>
 
-        {unpaid && order.paymentMethod === 'BANK_TRANSFER' && <BankTransferBox code={order.code} amount={order.total} />}
+        {unpaid && order.paymentMethod === 'BANK_TRANSFER' && <BankTransferBox code={order.code} amount={order.total} bank={settings.bank} />}
         {unpaid && settings.payment.vnpay && order.channel === 'ONLINE' && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4">
             <span className="text-sm text-sky-900">{order.paymentMethod === 'VNPAY' ? 'Đơn hàng chưa được thanh toán qua VNPay.' : 'Bạn có thể thanh toán online ngay qua VNPay.'}</span>

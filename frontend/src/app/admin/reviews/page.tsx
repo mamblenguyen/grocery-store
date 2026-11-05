@@ -1,4 +1,5 @@
 'use client';
+import { useAdminStoreHref } from '@/context/store';
 import { Eye, EyeOff, MessageSquare, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -9,6 +10,7 @@ import { dateTime } from '@/lib/format';
 import type { Paged, Review } from '@/lib/types';
 
 export default function ReviewsAdminPage() {
+  const storeLink = useAdminStoreHref();
   const toast = useToast();
   const [f, setF] = useState({ search: '', rating: '', status: '', page: 1 });
   const [data, setData] = useState<Paged<Review> | null>(null);
@@ -31,7 +33,7 @@ export default function ReviewsAdminPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imageUrl(r.product?.thumbnail)} alt="" className="h-14 w-14 rounded-xl object-cover" />
                 <div className="min-w-0 flex-1">
-                  <Link href={`/products/${r.product?.slug}`} target="_blank" className="font-semibold text-ink hover:text-brand-700">{r.product?.name}</Link>
+                  <Link href={storeLink(`/products/${r.product?.slug}`)} target="_blank" className="font-semibold text-ink hover:text-brand-700">{r.product?.name}</Link>
                   <div className="mt-0.5 flex flex-wrap items-center gap-2 text-sm"><Stars value={r.rating} size="h-3.5 w-3.5" /><span className="text-slate-500">{r.user.fullName} · {r.user.email}</span><span className="text-xs text-slate-400">{dateTime(r.createdAt)}</span></div>
                   {r.comment && <p className="mt-1.5 text-sm text-slate-600">{r.comment}</p>}
                 </div>

@@ -1,4 +1,5 @@
 'use client';
+import { useStoreHref } from '@/context/store';
 import { ShoppingBag, Trash2, Truck, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -26,6 +27,7 @@ export function FreeShipProgress({ subtotal }: { subtotal: number }) {
 }
 
 export function CartDrawer() {
+  const sh = useStoreHref();
   const { items, isOpen, setOpen, update, remove, subtotal, count } = useCart();
   const pathname = usePathname();
   useEffect(() => setOpen(false), [pathname, setOpen]);
@@ -47,7 +49,7 @@ export function CartDrawer() {
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brand-50"><ShoppingBag className="h-9 w-9 text-brand-600" /></div>
             <p className="text-slate-500">Giỏ hàng của bạn đang trống</p>
-            <Link href="/products" className="btn-primary">Bắt đầu mua sắm</Link>
+            <Link href={sh('/products')} className="btn-primary">Bắt đầu mua sắm</Link>
           </div>
         ) : (
           <>
@@ -58,7 +60,7 @@ export function CartDrawer() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={imageUrl(i.image)} alt="" className="h-20 w-20 shrink-0 rounded-xl border border-slate-100 object-cover" />
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <Link href={`/products/${i.slug}`} className="line-clamp-2 text-sm font-semibold text-ink hover:text-brand-700">{i.productName}</Link>
+                    <Link href={sh(`/products/${i.slug}`)} className="line-clamp-2 text-sm font-semibold text-ink hover:text-brand-700">{i.productName}</Link>
                     <span className="text-xs text-slate-400">{i.variantName}</span>
                     <div className="mt-auto flex items-center justify-between pt-2">
                       <QtyInput size="sm" value={i.quantity} max={i.stock} onChange={(q) => update(i.variantId, q)} />
@@ -72,8 +74,8 @@ export function CartDrawer() {
             <div className="space-y-3 border-t border-slate-100 bg-slate-50/60 p-5">
               <div className="flex justify-between text-base"><span>Tạm tính</span><span className="font-bold text-ink">{money(subtotal)}</span></div>
               <div className="grid grid-cols-2 gap-2">
-                <Link href="/cart" className="btn-outline">Xem giỏ hàng</Link>
-                <Link href="/checkout" className="btn-primary">Thanh toán</Link>
+                <Link href={sh('/cart')} className="btn-outline">Xem giỏ hàng</Link>
+                <Link href={sh('/checkout')} className="btn-primary">Thanh toán</Link>
               </div>
             </div>
           </>

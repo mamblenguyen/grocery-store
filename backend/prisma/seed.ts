@@ -143,7 +143,7 @@ async function seedCatalog(storeId: number, list: Seed[], priceFactor = 1) {
     const created = await prisma.category.create({ data: { ...c, slug: slugify(c.name), sortOrder: i, storeId } });
     catMap[c.name] = created.id;
   }
-  for (const p of list) {
+  for (const [pi, p] of list.entries()) {
     const variants = Object.fromEntries(Object.entries(p.variants).map(([k, v]) => [k, { ...v, price: Math.round((v.price * priceFactor) / 500) * 500, compareAtPrice: v.compareAtPrice && Math.round((v.compareAtPrice * priceFactor) / 500) * 500 }]));
     const prices = Object.values(variants).map((v) => v.price);
     const product = await prisma.product.create({
@@ -169,7 +169,8 @@ async function seedCatalog(storeId: number, list: Seed[], priceFactor = 1) {
       const variant = await prisma.productVariant.create({
         data: {
           storeId, productId: product.id, name: key, position: pos,
-          sku: `${prefix}-${product.id}-${String(++pos).padStart(2, '0')}`,
+          // SKU ổn định giữa các lần seed: theo thứ tự sản phẩm (SKU chỉ cần duy nhất trong 1 cửa hàng)
+          sku: `${prefix}-${100 + pi + 1}-${String(++pos).padStart(2, '0')}`,
           barcode: ean13(barcodeSeq++),
           price: v.price, compareAtPrice: v.compareAtPrice, costPrice: Math.round(v.price * 0.8), stock: v.stock,
           optionValues: { create: parts.map((val, idx) => ({ optionValueId: valueIds[idx].get(val)! })) },

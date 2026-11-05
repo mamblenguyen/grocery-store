@@ -58,7 +58,7 @@ export default function PosPage() {
     } catch {}
     setReady(true);
     api<PickedVariant[]>('/admin/stock/variants?sellable=1&limit=1000').then(setQuick);
-    api<{ id: number; name: string }[]>('/categories').then(setCats).catch(() => {});
+    api<{ id: number; name: string }[]>('/admin/categories').then(setCats).catch(() => {});
   }, []);
   useEffect(() => { if (ready) try { localStorage.setItem(STORE_KEY, JSON.stringify({ bills, active })); } catch {} }, [bills, active, ready]);
   useEffect(() => { if (ready) try { localStorage.setItem('pos_camera', camera ? '1' : '0'); } catch {} }, [camera, ready]);
@@ -143,7 +143,7 @@ export default function PosPage() {
   const itemCount = bill.lines.reduce((s, l) => s + l.qty, 0);
 
   const applyCoupon = async () => {
-    try { const r = await api<{ discount: number }>('/coupons/validate', { method: 'POST', json: { code: bill.coupon, subtotal } }); update({ couponDiscount: r.discount }); toast(`Giảm ${money(r.discount)}`); }
+    try { const r = await api<{ discount: number }>('/admin/coupons/validate', { method: 'POST', json: { code: bill.coupon, subtotal } }); update({ couponDiscount: r.discount }); toast(`Giảm ${money(r.discount)}`); }
     catch (e: any) { update({ couponDiscount: 0 }); toast(e.message, 'error'); }
   };
 

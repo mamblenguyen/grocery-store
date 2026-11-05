@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { AuthShell } from '@/components/shop/AuthShell';
 import { useAuth } from '@/context/auth';
+import { lastStore } from '@/context/store';
 
 function LoginInner() {
   const { login } = useAuth();
@@ -19,7 +20,11 @@ function LoginInner() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true); setError('');
-    try { const u = await login(email, password); router.push(next || (u.role === 'CUSTOMER' ? '/' : '/admin')); }
+    try {
+      const u = await login(email, password);
+      const last = lastStore.get();
+      router.push(u.role === 'SUPER_ADMIN' ? next || '/super' : u.role === 'CUSTOMER' ? next || (last ? `/s/${last.slug}` : '/') : next || '/admin');
+    }
     catch (e: any) { setError(e.message); } finally { setLoading(false); }
   };
 

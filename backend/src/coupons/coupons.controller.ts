@@ -18,6 +18,12 @@ export class CouponsController {
 export class AdminCouponsController {
   constructor(private service: CouponsService) {}
 
+  /** POS: kiểm tra mã giảm giá của cửa hàng đang quản trị */
+  @Post('validate') async validate(@Body() dto: ValidateCouponDto) {
+    const { coupon, discount } = await this.service.apply(dto.code, dto.subtotal);
+    return { code: coupon.code, description: coupon.description, discount };
+  }
+
   @Get() list() {
     return this.service.list();
   }

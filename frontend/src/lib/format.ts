@@ -26,7 +26,7 @@ export const PAYMENT_METHOD: Record<string, string> = {
   CASH: 'Tiền mặt',
 };
 
-export const ROLES: Record<string, string> = { ADMIN: 'Quản trị', STAFF: 'Nhân viên', CUSTOMER: 'Khách hàng' };
+export const ROLES: Record<string, string> = { SUPER_ADMIN: 'Quản trị nền tảng', ADMIN: 'Chủ cửa hàng', STAFF: 'Nhân viên', CUSTOMER: 'Khách hàng' };
 
 export const STOCK_DOC_TYPE: Record<string, { label: string; short: string; cls: string }> = {
   IMPORT: { label: 'Phiếu nhập kho', short: 'Nhập', cls: 'bg-emerald-100 text-emerald-800' },

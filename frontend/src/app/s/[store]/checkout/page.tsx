@@ -1,4 +1,5 @@
 'use client';
+import { useStoreHref } from '@/context/store';
 import { Banknote, CalendarDays, CreditCard, Lock, MapPin, QrCode, TicketPercent } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -19,6 +20,7 @@ const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.ge
 const WD = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
 export default function CheckoutPage() {
+  const sh = useStoreHref();
   const { user, loading } = useAuth();
   const { settings } = useSettings();
   const cart = useCart();
@@ -48,7 +50,7 @@ export default function CheckoutPage() {
   useEffect(() => { if (!deliveryDate && days.length) setDeliveryDate(ymd(days[0])); }, [days, deliveryDate]);
 
   useEffect(() => {
-    if (!loading && !user) router.replace('/login?next=/checkout');
+    if (!loading && !user) router.replace(`/login?next=${sh('/checkout')}`);
     if (!user) return;
     api<Address[]>('/addresses').then((list) => {
       setAddresses(list);
@@ -91,7 +93,7 @@ export default function CheckoutPage() {
   };
 
   if (loading || !user) return <Spinner />;
-  if (!cart.items.length) return <div className="container-x py-16 text-center"><p className="mb-4 text-slate-500">Giỏ hàng trống.</p><Link href="/products" className="btn-primary">Mua sắm ngay</Link></div>;
+  if (!cart.items.length) return <div className="container-x py-16 text-center"><p className="mb-4 text-slate-500">Giỏ hàng trống.</p><Link href={sh('/products')} className="btn-primary">Mua sắm ngay</Link></div>;
 
   return (
     <form onSubmit={submit} className="container-x py-8">

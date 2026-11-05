@@ -97,4 +97,21 @@ export class UsersService {
     const totalSpent = orders.filter((o) => o.status === 'COMPLETED').reduce((s, o) => s + o.total, 0);
     return { ...user, orders, totalSpent };
   }
+
+  // ───────────── Gói dịch vụ của cửa hàng ─────────────
+  async subscription() {
+    const sid = storeId();
+    const [store, products, members, payments] = await Promise.all([
+      this.prisma.store.findUniqueOrThrow({
+        where: { id: sid },
+        select: { id: true, slug: true, name: true, status: true, planExpiresAt: true, createdAt: true, plan: true },
+      }),
+      this.prisma.product.count({ where: { storeId: sid } }),
+      this.prisma.user.count({ where: { storeId: sid } }),
+      this.prisma.storePayment.findMany({ where: { storeId: sid }, orderBy: { createdAt: 'desc' }, take: 50, include: { plan: { select: { name: true } } } }),
+    ]);
+    const plans = await this.prisma.plan.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }, { priceMonthly: 'asc' }] });
+    const daysLeft = store.planExpiresAt ? Math.ceil((store.planExpiresAt.getTime() - Date.now()) / 86400000) : null;
+    return { store: { ...store, daysLeft }, usage: { products, staff: Math.max(0, members - 1) }, payments, plans };
+  }
 }

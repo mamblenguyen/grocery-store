@@ -18,7 +18,7 @@ export default function WishlistPage() {
     <AccountShell>
       <div className="card">
         <h2 className="mb-5 text-lg font-bold">Sản phẩm yêu thích</h2>
-        {!shown ? <Spinner /> : !shown.length ? <Empty icon={<Heart className="h-7 w-7" />} text="Chưa có sản phẩm yêu thích"><Link href="/products" className="btn-primary">Khám phá sản phẩm</Link></Empty> : <ProductGrid products={shown} cols="grid-cols-2 sm:grid-cols-3 xl:grid-cols-4" />}
+        {!shown ? <Spinner /> : !shown.length ? <Empty icon={<Heart className="h-7 w-7" />} text="Chưa có sản phẩm yêu thích"><Link href="/" className="btn-primary">Khám phá cửa hàng</Link></Empty> : <ProductGrid products={shown} cols="grid-cols-2 sm:grid-cols-3 xl:grid-cols-4" />}
       </div>
     </AccountShell>
   );

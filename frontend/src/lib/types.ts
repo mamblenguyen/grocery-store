@@ -1,8 +1,28 @@
-export type Role = 'ADMIN' | 'STAFF' | 'CUSTOMER';
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'STAFF' | 'CUSTOMER';
+export type StoreStatus = 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
+
+export interface StoreRef { id: number; slug: string; name: string }
+
+export interface Plan {
+  id: number; code: string; name: string; description?: string | null; priceMonthly: number;
+  maxProducts: number | null; maxStaff: number | null; isActive: boolean; sortOrder: number; _count?: { stores: number };
+}
+
+/** Cửa hàng của tài khoản quản trị (trả về trong /auth/me) */
+export interface MyStore extends StoreRef {
+  status: StoreStatus; logo?: string | null; planExpiresAt: string | null; daysLeft: number | null;
+  plan: { id: number; name: string; maxProducts: number | null; maxStaff: number | null } | null;
+}
+
+/** Cửa hàng trong danh bạ công khai */
+export interface PublicStore extends StoreRef {
+  logo?: string | null; address?: string | null; hotline?: string | null; slogan?: string; openingHours?: string;
+  banner?: string | null; productCount: number; acceptingOrders: boolean;
+}
 
 export interface User {
   id: number; email: string; fullName: string; phone?: string | null; address?: string | null;
-  role: Role; isActive: boolean; createdAt: string;
+  role: Role; isActive: boolean; createdAt: string; store?: MyStore | null;
 }
 
 export interface Category {
@@ -26,6 +46,7 @@ export interface Product {
   minPrice: number; maxPrice: number; soldCount: number; ratingAvg: number; ratingCount: number; categoryId?: number | null;
   category?: { id: number; name: string; slug: string } | null;
   options?: ProductOption[]; variants: Variant[]; totalStock?: number; related?: Product[]; updatedAt?: string;
+  store?: StoreRef;
 }
 
 export interface OrderItem {
@@ -46,7 +67,7 @@ export interface Order {
   cashReceived?: number | null;
   createdAt: string; updatedAt: string; items?: OrderItem[]; payments?: PaymentTransaction[];
   user?: { id: number; email: string; fullName?: string } | null; createdBy?: { id: number; fullName: string } | null;
-  _count?: { items: number };
+  _count?: { items: number }; storeId?: number; store?: StoreRef;
 }
 
 export interface Coupon {

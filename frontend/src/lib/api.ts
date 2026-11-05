@@ -8,6 +8,24 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(TOKEN_KEY),
 };
 
+const ACTING_KEY = 'grocery_acting_store';
+
+/** Cửa hàng đang xem ở storefront (/s/[store]) – gửi kèm header X-Store */
+let currentStore: string | null = null;
+export const setApiStore = (slug: string | null) => { currentStore = slug; };
+export const getApiStore = () => currentStore;
+
+export interface ActingStore { id: number; slug: string; name: string }
+/** Super admin đang quản trị hộ cửa hàng nào (header X-Store-Id cho /admin/*) */
+export const actingStore = {
+  get: (): ActingStore | null => {
+    if (typeof window === 'undefined') return null;
+    try { return JSON.parse(localStorage.getItem(ACTING_KEY) || 'null'); } catch { return null; }
+  },
+  set: (s: ActingStore) => localStorage.setItem(ACTING_KEY, JSON.stringify(s)),
+  clear: () => localStorage.removeItem(ACTING_KEY),
+};
+
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -18,6 +36,9 @@ export async function api<T = any>(path: string, opts: RequestInit & { json?: un
   const headers: Record<string, string> = { ...(opts.headers as Record<string, string>) };
   const token = tokenStore.get();
   if (token) headers.Authorization = `Bearer ${token}`;
+  if (currentStore && !headers['X-Store']) headers['X-Store'] = currentStore;
+  const acting = actingStore.get();
+  if (acting && path.startsWith('/admin') && !headers['X-Store-Id']) headers['X-Store-Id'] = String(acting.id);
   let body = opts.body;
   if (opts.json !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -28,6 +49,7 @@ export async function api<T = any>(path: string, opts: RequestInit & { json?: un
   if (!res.ok) {
     const msg = Array.isArray(data?.message) ? data.message.join(', ') : data?.message || 'Có lỗi xảy ra';
     if (res.status === 401 && token) tokenStore.clear();
+    if (res.status === 402 && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('plan-expired', { detail: msg }));
     throw new ApiError(msg, res.status);
   }
   return data as T;

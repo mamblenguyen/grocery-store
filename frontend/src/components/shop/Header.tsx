@@ -1,6 +1,7 @@
 'use client';
+import { useStoreHref } from '@/context/store';
 import {
-  Bell, ChevronDown, Grid3x3, Heart, LayoutDashboard, LogOut, MapPin, Menu, Package, Phone, Search, ShoppingCart, User, X,
+  Bell, ChevronDown, Grid3x3, ShieldCheck, Store, Heart, LayoutDashboard, LogOut, MapPin, Menu, Package, Phone, Search, ShoppingCart, User, X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -15,9 +16,10 @@ import { money } from '@/lib/format';
 import type { Category, Paged, Product } from '@/lib/types';
 
 export function Logo({ light = false }: { light?: boolean }) {
+  const sh = useStoreHref();
   const { settings } = useSettings();
   return (
-    <Link href="/" className="flex shrink-0 items-center gap-2.5">
+    <Link href={sh('/')} className="flex shrink-0 items-center gap-2.5">
       {settings.logo ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={imageUrl(settings.logo)} alt={settings.storeName} className="h-10 w-auto" />
@@ -35,6 +37,7 @@ export function Logo({ light = false }: { light?: boolean }) {
 }
 
 function SearchBox({ onDone }: { onDone?: () => void }) {
+  const sh = useStoreHref();
   const router = useRouter();
   const sp = useSearchParams();
   const [q, setQ] = useState(sp.get('search') ?? '');
@@ -58,7 +61,7 @@ function SearchBox({ onDone }: { onDone?: () => void }) {
     e.preventDefault();
     setOpen(false);
     onDone?.();
-    router.push(`/products?search=${encodeURIComponent(q.trim())}`);
+    router.push(sh(`/products?search=${encodeURIComponent(q.trim())}`));
   };
 
   return (
@@ -77,7 +80,7 @@ function SearchBox({ onDone }: { onDone?: () => void }) {
       {open && results.length > 0 && (
         <div className="animate-fade-in absolute top-full right-0 left-0 z-50 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lift">
           {results.map((p) => (
-            <Link key={p.id} href={`/products/${p.slug}`} onClick={() => { setOpen(false); onDone?.(); }} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50">
+            <Link key={p.id} href={sh(`/products/${p.slug}`)} onClick={() => { setOpen(false); onDone?.(); }} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={imageUrl(p.thumbnail)} alt="" className="h-11 w-11 rounded-lg object-cover" />
               <div className="min-w-0 flex-1">
@@ -96,8 +99,8 @@ function SearchBox({ onDone }: { onDone?: () => void }) {
   );
 }
 
-function UserMenu() {
-  const { user, logout, isStaff } = useAuth();
+export function UserMenu() {
+  const { user, logout } = useAuth();
   const router = useRouter();
   if (!user)
     return (
@@ -114,7 +117,8 @@ function UserMenu() {
       </button>
       <div className="invisible absolute right-0 z-50 w-56 pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100">
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-lift">
-          {isStaff && <Link href="/admin" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"><LayoutDashboard className="h-4 w-4" /> Trang quản trị</Link>}
+          {user.role === 'SUPER_ADMIN' && <Link href="/super" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"><ShieldCheck className="h-4 w-4" /> Quản trị nền tảng</Link>}
+          {(user.role === 'ADMIN' || user.role === 'STAFF') && <Link href="/admin" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"><LayoutDashboard className="h-4 w-4" /> Quản trị {user.store?.name ?? 'cửa hàng'}</Link>}
           <Link href="/account" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"><User className="h-4 w-4" /> Thông tin tài khoản</Link>
           <Link href="/orders" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"><Package className="h-4 w-4" /> Đơn hàng của tôi</Link>
           <Link href="/account/addresses" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"><MapPin className="h-4 w-4" /> Sổ địa chỉ</Link>
@@ -129,6 +133,7 @@ function UserMenu() {
 }
 
 export function Header() {
+  const sh = useStoreHref();
   const { settings } = useSettings();
   const { count, setOpen } = useCart();
   const wl = useWishlist();
@@ -148,6 +153,7 @@ export function Header() {
             <div className="hidden shrink-0 items-center gap-5 text-brand-100 md:flex">
               {settings.openingHours && <span>🕒 {settings.openingHours}</span>}
               <Link href="/orders" className="hover:text-white">Tra cứu đơn hàng</Link>
+              <Link href="/" className="hover:text-white">Cửa hàng khác</Link>
             </div>
           </div>
         </div>
@@ -186,7 +192,7 @@ export function Header() {
             <div className="invisible absolute top-full left-0 z-50 w-72 opacity-0 transition group-hover:visible group-hover:opacity-100">
               <div className="rounded-b-xl border border-slate-200 bg-white p-1.5 shadow-lift">
                 {cats.map((c) => (
-                  <Link key={c.id} href={`/products?category=${c.slug}`} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-brand-50 hover:text-brand-800">
+                  <Link key={c.id} href={sh(`/products?category=${c.slug}`)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-brand-50 hover:text-brand-800">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={imageUrl(c.image)} alt="" className="h-8 w-8 rounded-lg object-cover" />
                     <span className="flex-1">{c.name}</span>
@@ -197,9 +203,9 @@ export function Header() {
             </div>
           </div>
           {cats.slice(0, 6).map((c) => (
-            <Link key={c.id} href={`/products?category=${c.slug}`} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-brand-700">{c.name}</Link>
+            <Link key={c.id} href={sh(`/products?category=${c.slug}`)} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-brand-700">{c.name}</Link>
           ))}
-          <Link href="/products?sort=best_selling" className="ml-auto rounded-lg px-3 py-2 text-sm font-semibold text-accent-600 hover:bg-accent-50">🔥 Bán chạy</Link>
+          <Link href={sh('/products?sort=best_selling')} className="ml-auto rounded-lg px-3 py-2 text-sm font-semibold text-accent-600 hover:bg-accent-50">🔥 Bán chạy</Link>
         </div>
       </nav>
 
@@ -212,11 +218,15 @@ export function Header() {
             <div className="flex-1 overflow-y-auto p-3">
               <div className="px-3 pb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">Danh mục</div>
               {cats.map((c) => (
-                <Link key={c.id} href={`/products?category=${c.slug}`} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-slate-50">
+                <Link key={c.id} href={sh(`/products?category=${c.slug}`)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-slate-50">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={imageUrl(c.image)} alt="" className="h-8 w-8 rounded-lg object-cover" />{c.name}
                 </Link>
               ))}
+            </div>
+            <div className="border-t border-slate-100 p-3">
+              <Link href="/orders" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-slate-50"><Package className="h-4 w-4 text-slate-400" /> Đơn hàng của tôi</Link>
+              <Link href="/" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-slate-50"><Store className="h-4 w-4 text-slate-400" /> Xem cửa hàng khác</Link>
             </div>
             {settings.hotline && <a href={`tel:${settings.hotline}`} className="m-3 btn-primary"><Phone className="h-4 w-4" /> Gọi {settings.hotline}</a>}
           </div>

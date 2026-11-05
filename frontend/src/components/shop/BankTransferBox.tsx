@@ -3,11 +3,12 @@ import { Copy } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { useSettings } from '@/context/settings';
 import { money, vietQrUrl } from '@/lib/format';
+import type { StoreSettings } from '@/lib/types';
 
-export function BankTransferBox({ code, amount }: { code: string; amount: number }) {
+export function BankTransferBox({ code, amount, bank }: { code: string; amount: number; bank?: StoreSettings['bank'] }) {
   const { settings } = useSettings();
   const toast = useToast();
-  const b = settings.bank;
+  const b = bank ?? settings.bank;
   if (!b.accountNo) return null;
   const copy = (v: string) => { navigator.clipboard?.writeText(v); toast('Đã sao chép'); };
   const row = (label: string, value: string, copyable = false) => (

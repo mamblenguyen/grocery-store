@@ -39,6 +39,14 @@ export class StoresController {
     return paged(await Promise.all(rows.map((r) => this.present(r))), total, page, limit);
   }
 
+  /** Bảng giá gói dịch vụ cho trang giới thiệu nền tảng */
+  @Get('plans') plans() {
+    return this.prisma.plan.findMany({
+      where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }, { priceMonthly: 'asc' }],
+      select: { id: true, code: true, name: true, description: true, priceMonthly: true, maxProducts: true, maxStaff: true },
+    });
+  }
+
   @Get(':slug') async one(@Param('slug') slug: string) {
     const s = await this.prisma.store.findFirst({ where: { slug: slug.toLowerCase(), status: 'ACTIVE' }, select });
     if (!s) throw new NotFoundException('Không tìm thấy cửa hàng hoặc cửa hàng đang tạm ngưng');

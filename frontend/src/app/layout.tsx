@@ -10,15 +10,14 @@ import '@fontsource/be-vietnam-pro/latin-600.css';
 import '@fontsource/be-vietnam-pro/latin-700.css';
 import '@fontsource/be-vietnam-pro/latin-800.css';
 import { AuthProvider } from '@/context/auth';
-import { CartProvider } from '@/context/cart';
-import { SettingsProvider } from '@/context/settings';
 import { WishlistProvider } from '@/context/wishlist';
 import { ToastProvider } from '@/components/Toast';
+import { PLATFORM_NAME } from '@/lib/platform';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: { default: 'Tạp Hoá Xanh – Đi chợ online, giao nhanh 2 giờ', template: '%s | Tạp Hoá Xanh' },
-  description: 'Rau củ, thịt cá, đồ khô, đồ uống, hoá phẩm… giá tốt mỗi ngày. Giao nhanh trong 2 giờ.',
+  title: { default: `${PLATFORM_NAME} – Đi chợ online tại tạp hoá gần bạn`, template: `%s | ${PLATFORM_NAME}` },
+  description: 'Nền tảng bán hàng cho tạp hoá: đặt hàng online, bán tại quầy, quản lý kho. Rau củ, đồ khô, đồ uống… giao nhanh.',
 };
 
 export const viewport: Viewport = { themeColor: '#0a9c4b' };
@@ -28,13 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="vi">
       <body>
         <ToastProvider>
-          <SettingsProvider>
-            <AuthProvider>
-              <WishlistProvider>
-                <CartProvider>{children}</CartProvider>
-              </WishlistProvider>
-            </AuthProvider>
-          </SettingsProvider>
+          <AuthProvider>
+            <WishlistProvider>{children}</WishlistProvider>
+          </AuthProvider>
         </ToastProvider>
       </body>
     </html>

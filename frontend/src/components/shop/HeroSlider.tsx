@@ -1,4 +1,5 @@
 'use client';
+import { useStoreHref } from '@/context/store';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -6,6 +7,7 @@ import { imageUrl } from '@/lib/api';
 import type { Banner } from '@/lib/types';
 
 export function HeroSlider({ banners }: { banners: Banner[] }) {
+  const sh = useStoreHref();
   const [i, setI] = useState(0);
   const n = banners.length;
   useEffect(() => {
@@ -24,7 +26,7 @@ export function HeroSlider({ banners }: { banners: Banner[] }) {
           <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center gap-3 p-6 sm:gap-4 sm:p-12">
             {b.title && <h2 className="text-2xl leading-tight font-extrabold text-white drop-shadow sm:text-4xl lg:text-5xl">{b.title}</h2>}
             {b.subtitle && <p className="text-sm text-white/90 sm:text-lg">{b.subtitle}</p>}
-            {b.link && <Link href={b.link} className="btn-accent btn-lg mt-2 w-fit">{b.buttonText || 'Xem ngay'}</Link>}
+            {b.link && <Link href={sh(b.link)} className="btn-accent btn-lg mt-2 w-fit">{b.buttonText || 'Xem ngay'}</Link>}
           </div>
         </div>
       ))}

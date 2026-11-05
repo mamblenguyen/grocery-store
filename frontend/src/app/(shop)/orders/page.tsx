@@ -1,5 +1,5 @@
 'use client';
-import { ChevronRight, Package } from 'lucide-react';
+import { ChevronRight, Package, Store } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AccountShell } from '@/components/shop/AccountShell';
@@ -24,12 +24,12 @@ export default function MyOrdersPage() {
           ))}
         </div>
         <div className="p-5">
-          {!data ? <Spinner /> : !data.items.length ? <Empty icon={<Package className="h-7 w-7" />} text="Chưa có đơn hàng nào"><Link href="/products" className="btn-primary">Mua sắm ngay</Link></Empty> : (
+          {!data ? <Spinner /> : !data.items.length ? <Empty icon={<Package className="h-7 w-7" />} text="Chưa có đơn hàng nào"><Link href="/" className="btn-primary">Chọn cửa hàng để mua sắm</Link></Empty> : (
             <div className="space-y-3">
               {data.items.map((o) => (
                 <Link key={o.id} href={`/orders/${o.id}`} className="block rounded-2xl border border-slate-200 p-4 transition hover:border-brand-300 hover:shadow-soft">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2"><span className="font-bold text-ink">{o.code}</span><span className="text-xs text-slate-400">{dateTime(o.createdAt)}</span></div>
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5"><span className="font-bold text-ink">{o.code}</span><span className="text-xs text-slate-400">{dateTime(o.createdAt)}</span>{o.store && <span className="badge bg-brand-50 text-brand-700"><Store className="h-3 w-3" />{o.store.name}</span>}</div>
                     <div className="flex gap-1.5"><PaymentBadge status={o.paymentStatus} /><StatusBadge status={o.status} /></div>
                   </div>
                   <div className="mt-3 flex items-center gap-3">

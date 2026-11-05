@@ -1,17 +1,21 @@
 'use client';
+import { storeHref, useStoreSlug } from '@/context/store';
 import { Heart, Plus, ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
 import { Stars } from '@/components/ui';
-import { useCart } from '@/context/cart';
+import { useOptionalCart } from '@/context/cart';
 import { useWishlist } from '@/context/wishlist';
 import { imageUrl } from '@/lib/api';
 import { money } from '@/lib/format';
 import type { Product } from '@/lib/types';
 
 export function ProductCard({ p }: { p: Product }) {
-  const cart = useCart();
+  // Trong cửa hàng: link theo cửa hàng hiện tại; ở trang chung (yêu thích): theo cửa hàng của sản phẩm
+  const slug = useStoreSlug() ?? p.store?.slug ?? null;
+  const sh = (path: string) => (slug ? storeHref(slug, path) : '/');
+  const cart = useOptionalCart();
   const wl = useWishlist();
   const toast = useToast();
   const router = useRouter();
@@ -27,7 +31,7 @@ export function ProductCard({ p }: { p: Product }) {
 
   const quickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!single) return router.push(`/products/${p.slug}`);
+    if (!single || !cart) return router.push(sh(`/products/${p.slug}`));
     const inCart = cart.items.find((i) => i.variantId === single.id)?.quantity ?? 0;
     if (inCart >= single.stock) return toast(`Chỉ còn ${single.stock} sản phẩm`, 'error');
     cart.add({ variantId: single.id, productId: p.id, slug: p.slug, productName: p.name, variantName: single.name, image: p.thumbnail, price: single.price, stock: single.stock });
@@ -35,7 +39,7 @@ export function ProductCard({ p }: { p: Product }) {
   };
 
   return (
-    <Link href={`/products/${p.slug}`} className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white transition duration-300 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lift">
+    <Link href={sh(`/products/${p.slug}`)} className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white transition duration-300 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lift">
       <div className="relative aspect-square overflow-hidden bg-slate-50">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={imageUrl(p.thumbnail)} alt={p.name} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
