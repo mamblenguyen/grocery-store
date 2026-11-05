@@ -118,6 +118,7 @@ export function UserMenu() {
       </button>
       <div className="invisible absolute right-0 z-50 w-56 pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100">
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-lift">
+          {user.role === 'SHIPPER' && <Link href="/shipper" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"><Package className="h-4 w-4" /> Nhận đơn giao hàng</Link>}
           {user.role === 'SUPER_ADMIN' && <Link href="/super" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"><ShieldCheck className="h-4 w-4" /> Quản trị nền tảng</Link>}
           {(user.role === 'ADMIN' || user.role === 'STAFF') && <Link href="/admin" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"><LayoutDashboard className="h-4 w-4" /> Quản trị {user.store?.name ?? 'cửa hàng'}</Link>}
           <Link href="/account" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"><User className="h-4 w-4" /> Thông tin tài khoản</Link>

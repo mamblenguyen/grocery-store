@@ -57,7 +57,15 @@ export class SettingsService {
   }
 
   async getAdmin() {
-    return { ...(await this.get()), vnpayConfigured: this.vnpayConfigured() };
+    const id = storeId();
+    const st = await this.prisma.store.findUnique({ where: { id }, select: { lat: true, lng: true } });
+    return { ...(await this.get(id)), vnpayConfigured: this.vnpayConfigured(), location: { lat: st?.lat ?? null, lng: st?.lng ?? null } };
+  }
+
+  /** Vị trí cửa hàng = điểm tài xế đến lấy hàng */
+  async setLocation(lat: number | null, lng: number | null) {
+    await this.prisma.store.update({ where: { id: storeId() }, data: { lat, lng } });
+    return this.getAdmin();
   }
 
   async update(patch: Partial<StoreSettings>) {

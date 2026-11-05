@@ -278,14 +278,14 @@ async function main() {
   const pwd = await bcrypt.hash('123456', 10);
   // Cửa hàng 1: đầy đủ sản phẩm
   const s1 = await prisma.store.create({
-    data: { slug: 'tap-hoa-xanh', name: 'Tạp Hoá Xanh', phone: '1900 1234', address: '123 Lê Lợi, Quận 1, TP. Hồ Chí Minh', planId: pro.id, planExpiresAt: monthsFromNow(12),
+    data: { slug: 'tap-hoa-xanh', name: 'Tạp Hoá Xanh', phone: '1900 1234', address: '123 Lê Lợi, Quận 1, TP. Hồ Chí Minh', planId: pro.id, planExpiresAt: monthsFromNow(12), lat: 10.7743, lng: 106.7009,
       businessName: 'Công ty TNHH Tạp Hoá Xanh', businessType: 'CONG_TY', taxCode: '0312345678', businessAddress: '123 Lê Lợi, Quận 1, TP. Hồ Chí Minh',
       representative: 'Trần Văn Xanh', representativeId: '079088001234', representativePhone: '0903111222',
       bankName: 'Vietcombank', bankAccountNo: '1234567890', bankAccountName: 'CONG TY TNHH TAP HOA XANH', contractNo: 'HD-2026-001', contractSignedAt: new Date() },
   });
   // Cửa hàng 2: ít sản phẩm, giá khác, gói cơ bản
   const s2 = await prisma.store.create({
-    data: { slug: 'tap-hoa-ba-nam', name: 'Tạp Hoá Bà Năm', phone: '0908 555 666', address: '45 Nguyễn Trãi, Quận 5, TP. Hồ Chí Minh', planId: basic.id, planExpiresAt: monthsFromNow(1),
+    data: { slug: 'tap-hoa-ba-nam', name: 'Tạp Hoá Bà Năm', phone: '0908 555 666', address: '45 Nguyễn Trãi, Quận 5, TP. Hồ Chí Minh', planId: basic.id, planExpiresAt: monthsFromNow(1), lat: 10.7569, lng: 106.6826,
       businessName: 'Hộ kinh doanh Nguyễn Thị Năm', businessType: 'HKD', taxCode: '8012345678', representative: 'Nguyễn Thị Năm', representativeId: '079175004567',
       representativePhone: '0908555666', bankName: 'MB Bank', bankAccountNo: '0908555666', bankAccountName: 'NGUYEN THI NAM', contractNo: 'HD-2026-002', contractSignedAt: new Date() },
   });
@@ -301,6 +301,13 @@ async function main() {
       { email: 'owner2@grocery.local', password: pwd, fullName: 'Bà Năm', role: 'ADMIN', storeId: s2.id },
       { email: 'customer@grocery.local', password: pwd, fullName: 'Nguyễn Văn A', phone: '0901234567', address: '123 Lê Lợi, Q.1, TP.HCM' },
     ],
+  });
+  // Tài xế giao hàng của sàn
+  await prisma.user.create({
+    data: {
+      email: 'shipper@grocery.local', password: pwd, fullName: 'Trần Văn Tài', phone: '0938111222', role: 'SHIPPER',
+      shipperProfile: { create: { vehicleType: 'XE_MAY', plateNumber: '59X1-234.56', area: 'Quận 1, Quận 3, Quận 5', lat: 10.7769, lng: 106.6953 } },
+    },
   });
 
   await seedCatalog(s1.id, products);
@@ -348,6 +355,7 @@ async function main() {
   console.log('   Tạp Hoá Xanh (/s/tap-hoa-xanh): admin@grocery.local, staff@grocery.local');
   console.log('   Tạp Hoá Bà Năm (/s/tap-hoa-ba-nam): owner2@grocery.local');
   console.log('   Khách hàng: customer@grocery.local');
+  console.log('   Tài xế: shipper@grocery.local (vào /shipper)');
 }
 
 main().catch((e) => { console.error(e); process.exit(1); }).finally(() => prisma.$disconnect());

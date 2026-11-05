@@ -50,7 +50,13 @@
       "expo-secure-store",
       "expo-image",
       "expo-web-browser",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Cho phép dùng vị trí để ghim địa chỉ giao hàng và để tài xế nhận đơn gần, cập nhật vị trí khi đang giao"
+        }
+      ]
     ],
     "scheme": "taphoaxanh",
     "experiments": {

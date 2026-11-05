@@ -1,8 +1,6 @@
 import { OrderChannel, OrderStatus, PaymentStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import {
-  ArrayMinSize, IsArray, IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, Min, MinLength, ValidateNested,
-} from 'class-validator';
+import { ArrayMinSize, IsArray, IsDateString, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, Min, MinLength, ValidateNested } from 'class-validator';
 import { PaginationDto } from '../../common/pagination.dto';
 
 export class OrderItemInput {
@@ -26,6 +24,9 @@ export class CreateOrderDto extends PreviewOrderDto {
   /** yyyy-mm-dd */
   @IsOptional() @IsDateString() deliveryDate?: string;
   @IsOptional() @IsString() deliverySlot?: string;
+  /** Vị trí giao hàng (ghim trên bản đồ / GPS) */
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90) lat?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) lng?: number;
 }
 
 /** Bán tại quầy */

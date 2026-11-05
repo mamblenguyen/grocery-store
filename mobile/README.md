@@ -1,5 +1,7 @@
 # 📱 App Chợ Tạp Hoá (Expo / React Native)
 
+> **Tài xế giao hàng:** tài khoản tài xế (`shipper@grocery.local`) có tab **Nhận đơn**: bật nhận đơn (dùng GPS – `expo-location`), xem đơn gần, nhận đơn, chỉ đường bằng Google/Apple Maps, gọi cửa hàng/khách, xác nhận lấy & giao, thu COD. Khách theo dõi tài xế trong trang đơn hàng; khi thanh toán có nút **ghim vị trí hiện tại**.
+>
 > **Sàn TMĐT:** trang chủ app hiển thị hàng của **mọi đối tác** (tìm & thêm vào giỏ thẳng từ sàn), giỏ hàng chung chia theo cửa hàng, mỗi cửa hàng thanh toán riêng. Biến `EXPO_PUBLIC_ROOT_DOMAIN` (tuỳ chọn) để nhận đúng mã QR dạng subdomain.
 >
 > **Đa cửa hàng:** khách có thể **chọn cửa hàng** trong danh bạ hoặc **quét mã QR** dán tại quầy (mã lấy ở web `/admin/subscription`). Chạm tên cửa hàng ở trang chủ để đổi; mỗi cửa hàng có giỏ hàng riêng, đơn hàng hiện tên cửa hàng, "Mua lại" tự chuyển về đúng cửa hàng. Nhân viên đăng nhập sẽ tự mở cửa hàng của mình. **Super Admin** có tab **Nền tảng**: thống kê, danh sách đối tác, tạo cửa hàng, gia hạn, tạm ngưng/kích hoạt, đặt lại mật khẩu, **Quản trị hộ** (dùng POS/kho của cửa hàng đó).

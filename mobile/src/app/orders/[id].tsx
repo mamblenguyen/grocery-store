@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { BankTransfer } from '@/components/BankTransfer';
+import { DeliveryCard } from '@/components/DeliveryCard';
 import { OrderTimeline } from '@/components/OrderTimeline';
 import { toast } from '@/components/Toast';
 import { Button, Card, Empty, Loading, Row, StatusPill, T } from '@/components/ui';
@@ -30,6 +31,8 @@ export default function OrderDetail() {
   const load = useCallback(() => api<Order>(`/orders/my/${id}`).then(setO).catch((e) => setError(e.message)), [id]);
   // Tải lại khi quay về màn hình (vd sau khi thanh toán VNPay)
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  const tracking = !!o?.delivery && ['WAITING', 'ASSIGNED', 'PICKED_UP'].includes(o.delivery.status);
+  useEffect(() => { if (!tracking) return; const t = setInterval(load, 10000); return () => clearInterval(t); }, [tracking, load]);
   // Cài đặt (tài khoản ngân hàng, VNPay) của cửa hàng bán đơn này
   const settings = useStoreSettings(o?.store?.slug) ?? FALLBACK_SETTINGS;
 
@@ -72,6 +75,7 @@ export default function OrderDetail() {
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 760, width: '100%', alignSelf: 'center' }}>
       <Stack.Screen options={{ title: o.code }} />
+      {o.delivery && <DeliveryCard d={o.delivery} />}
       {o.store && <Row gap={6}><Ionicons name="storefront-outline" size={16} color={C.brand700} /><Text style={{ color: C.brand700, fontWeight: '700' }}>{o.store.name}</Text></Row>}
       {success && (
         <View style={{ backgroundColor: C.brand600, borderRadius: R.lg, padding: 16, flexDirection: 'row', gap: 12, alignItems: 'center' }}>

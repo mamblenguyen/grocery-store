@@ -25,7 +25,7 @@ function LoginInner() {
     setLoading(true); setError('');
     try {
       const u = await login(email, password);
-      go(u.role === 'SUPER_ADMIN' ? next || '/super' : u.role === 'CUSTOMER' ? next || '/' : next || '/admin');
+      go(u.role === 'SUPER_ADMIN' ? next || '/super' : u.role === 'SHIPPER' ? next || '/shipper' : u.role === 'CUSTOMER' ? next || '/' : next || '/admin');
     }
     catch (e: any) { setError(e.message); } finally { setLoading(false); }
   };
@@ -48,7 +48,8 @@ function LoginInner() {
           Tài khoản demo (mật khẩu <b>123456</b>):{' '}
           <button type="button" className="link" onClick={() => { setEmail('super@grocery.local'); setPassword('123456'); }}>super@grocery.local</button>{' · '}
           <button type="button" className="link" onClick={() => { setEmail('admin@grocery.local'); setPassword('123456'); }}>admin@grocery.local</button>{' · '}
-          <button type="button" className="link" onClick={() => { setEmail('customer@grocery.local'); setPassword('123456'); }}>customer@grocery.local</button>
+          <button type="button" className="link" onClick={() => { setEmail('customer@grocery.local'); setPassword('123456'); }}>customer@grocery.local</button>{' · '}
+          <button type="button" className="link" onClick={() => { setEmail('shipper@grocery.local'); setPassword('123456'); }}>shipper@grocery.local</button>
         </div>
       </form>
     </AuthShell>

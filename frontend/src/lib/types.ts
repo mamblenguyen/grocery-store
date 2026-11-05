@@ -1,4 +1,4 @@
-export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'STAFF' | 'CUSTOMER';
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'STAFF' | 'CUSTOMER' | 'SHIPPER';
 export type StoreStatus = 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
 
 export interface StoreRef { id: number; slug: string; name: string }
@@ -68,6 +68,18 @@ export interface Order {
   createdAt: string; updatedAt: string; items?: OrderItem[]; payments?: PaymentTransaction[];
   user?: { id: number; email: string; fullName?: string } | null; createdBy?: { id: number; fullName: string } | null;
   _count?: { items: number }; storeId?: number; store?: StoreRef;
+  dropoffLat?: number | null; dropoffLng?: number | null;
+  delivery?: Delivery | null;
+}
+
+export interface Delivery {
+  id: number; status: 'WAITING' | 'ASSIGNED' | 'PICKED_UP' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
+  fee: number; codAmount: number; distanceKm: number | null;
+  pickupAddress: string; pickupLat: number | null; pickupLng: number | null;
+  dropoffAddress: string; dropoffLat: number | null; dropoffLng: number | null;
+  shipperLat: number | null; shipperLng: number | null; shipperLocAt: string | null;
+  failReason: string | null; assignedAt: string | null; pickedUpAt: string | null; deliveredAt: string | null; createdAt: string;
+  shipper?: { id: number; fullName: string; phone: string | null; shipperProfile?: { vehicleType: string; plateNumber: string | null } | null } | null;
 }
 
 export interface Coupon {
@@ -98,6 +110,7 @@ export interface Review {
 
 export interface Address {
   id: number; label?: string | null; fullName: string; phone: string; address: string; isDefault: boolean;
+  lat?: number | null; lng?: number | null;
 }
 
 export interface Supplier {

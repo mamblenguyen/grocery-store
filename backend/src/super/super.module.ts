@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Module, Param, ParseIntPipe, Patch, Post
 import { Role, StoreStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
-  IsBoolean, IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min, MinLength, ValidateIf, ValidateNested,
+  IsBoolean, IsDateString, IsNumber, IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min, MinLength, ValidateIf, ValidateNested,
 } from 'class-validator';
 import { CurrentUser, SuperOnly } from '../common/decorators';
 import { PaginationDto } from '../common/pagination.dto';
@@ -75,6 +75,8 @@ class UpdateStoreDto {
   @IsOptional() @IsIn(Object.values(StoreStatus)) status?: StoreStatus;
   @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() planId?: number | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsDateString() planExpiresAt?: string | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsNumber() @Min(-90) @Max(90) lat?: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsNumber() @Min(-180) @Max(180) lng?: number | null;
   @IsOptional() @IsString() businessName?: string;
   @IsOptional() @IsIn(['HKD', 'CONG_TY', 'CA_NHAN', '']) businessType?: string;
   @IsOptional() @IsString() taxCode?: string;

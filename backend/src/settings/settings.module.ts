@@ -1,3 +1,5 @@
+import { Type } from 'class-transformer';
+import { IsNumber, IsOptional, Max, Min, ValidateIf } from 'class-validator';
 import { Body, Controller, Get, Global, Module, Put } from '@nestjs/common';
 import { AdminOnly, StoreOwner } from '../common/decorators';
 import { SettingsService } from './settings.service';
@@ -12,6 +14,11 @@ export class SettingsController {
   }
 }
 
+class LocationDto {
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsNumber() @Min(-90) @Max(90) lat?: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsNumber() @Min(-180) @Max(180) lng?: number | null;
+}
+
 @Controller('admin/settings')
 export class AdminSettingsController {
   constructor(private settings: SettingsService) {}
@@ -22,6 +29,10 @@ export class AdminSettingsController {
   }
 
   /** Cập nhật một phần cài đặt (body là object con của StoreSettings) */
+  @StoreOwner() @Put('location') location(@Body() body: LocationDto) {
+    return this.settings.setLocation(body.lat ?? null, body.lng ?? null);
+  }
+
   @StoreOwner() @Put() update(@Body() body: Partial<StoreSettings>) {
     return this.settings.update(body);
   }

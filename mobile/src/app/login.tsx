@@ -20,7 +20,7 @@ export default function Login() {
     try {
       const u = await login(email, password);
       if (router.canDismiss()) router.dismiss();
-      if (next) router.replace(next as any); else if (u.role !== 'CUSTOMER') router.replace('/manage');
+      if (next) router.replace(next as any); else if (u.role === 'SHIPPER') router.replace('/deliver'); else if (u.role !== 'CUSTOMER') router.replace('/manage');
     } catch (e: any) { setError(e.message); } finally { setLoading(false); }
   };
   return (

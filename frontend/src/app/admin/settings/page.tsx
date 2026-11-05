@@ -1,6 +1,8 @@
 'use client';
 import { ArrowDown, ArrowUp, Banknote, CircleCheck, CircleX, CreditCard, Image as ImageIcon, Plus, QrCode, Receipt, Save, Share2, Store, Trash2, Truck } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { LocationPicker } from '@/components/LocationPicker';
+import type { LatLng } from '@/lib/geo';
 import { ImageUploader } from '@/components/admin/ImageUploader';
 import { useToast } from '@/components/Toast';
 import { Spinner } from '@/components/ui';
@@ -46,7 +48,18 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [slot, setSlot] = useState('');
 
-  useEffect(() => { api<StoreSettings>('/admin/settings').then(setS); }, []);
+  const [loc, setLoc] = useState<LatLng | null>(null);
+  useEffect(() => {
+    api<StoreSettings & { location?: { lat: number | null; lng: number | null } }>('/admin/settings').then((r) => {
+      setS(r);
+      if (r.location?.lat != null && r.location?.lng != null) setLoc({ lat: r.location.lat, lng: r.location.lng });
+    });
+  }, []);
+  const saveLoc = async (v: LatLng | null) => {
+    setLoc(v);
+    try { await api('/admin/settings/location', { method: 'PUT', json: { lat: v?.lat ?? null, lng: v?.lng ?? null } }); toast(v ? 'Đã lưu vị trí cửa hàng' : 'Đã bỏ vị trí cửa hàng'); }
+    catch (e: any) { toast(e.message, 'error'); }
+  };
   if (!s) return <Spinner />;
   const up = (patch: Partial<StoreSettings>) => setS({ ...s, ...patch });
   const field = (k: keyof StoreSettings, label: string, opts: { type?: string; textarea?: boolean; hint?: string } = {}) => (
@@ -82,6 +95,7 @@ export default function SettingsPage() {
               <div><label className="label">Logo</label><ImageUploader value={s.logo ? [s.logo] : []} onChange={(v) => up({ logo: v[0] ?? '' })} /><p className="mt-1 text-xs text-slate-400">Để trống sẽ dùng logo mặc định.</p></div>
               <div className="grid gap-4 sm:grid-cols-2">{field('hotline', 'Hotline')}{field('email', 'Email', { type: 'email' })}</div>
               {field('address', 'Địa chỉ cửa hàng')}
+              <LocationPicker kind="store" value={loc} onChange={saveLoc} title="Vị trí cửa hàng (điểm tài xế đến lấy hàng)" hint="Dùng để tài xế của sàn tìm đường, tính quãng đường giao và hiển thị trên bản đồ theo dõi đơn. Lưu ngay khi chọn." />
               {field('openingHours', 'Giờ mở cửa')}
               {field('announcement', 'Thanh thông báo đầu trang', { hint: 'Hiển thị trên cùng mọi trang. Để trống để ẩn.' })}
             </>

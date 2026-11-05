@@ -36,6 +36,7 @@ export default function RootLayout() {
                   <Stack.Screen name="register" options={{ title: 'Tạo tài khoản', presentation: 'modal' }} />
                   <Stack.Screen name="forgot-password" options={{ title: 'Quên mật khẩu', presentation: 'modal' }} />
                   <Stack.Screen name="stores" options={{ title: 'Chọn cửa hàng' }} />
+                  <Stack.Screen name="shipper/[id]" options={{ title: 'Chuyến giao' }} />
                 </Stack>
                 <ToastHost />
               </CartProvider>

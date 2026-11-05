@@ -206,7 +206,7 @@ export class SuperService {
       where: { id },
       select: {
         ...storeListSelect,
-        ...Object.fromEntries([...PARTNER_FIELDS, 'contractSignedAt'].map((k) => [k, true])),
+        ...Object.fromEntries([...PARTNER_FIELDS, 'contractSignedAt', 'lat', 'lng'].map((k) => [k, true])),
         members: { select: memberSelect, orderBy: [{ role: 'asc' }, { createdAt: 'asc' }] },
         payments: { orderBy: { createdAt: 'desc' }, take: 50, include: { plan: { select: { name: true } }, createdBy: { select: { fullName: true } } } },
       },
@@ -230,7 +230,7 @@ export class SuperService {
 
   async updateStore(id: number, dto: PartnerInfo & {
     name?: string; slug?: string; phone?: string; email?: string; address?: string; logo?: string; note?: string;
-    status?: StoreStatus; planId?: number | null; planExpiresAt?: string | null;
+    status?: StoreStatus; planId?: number | null; planExpiresAt?: string | null; lat?: number | null; lng?: number | null;
   }) {
     const old = await this.prisma.store.findUnique({ where: { id } });
     if (!old) throw new NotFoundException('Không tìm thấy cửa hàng');
@@ -241,6 +241,7 @@ export class SuperService {
       data: {
         name: dto.name?.trim() || undefined, slug, phone: dto.phone, email: dto.email, address: dto.address, logo: dto.logo, note: dto.note,
         status: dto.status, ...partnerData(dto),
+        ...(dto.lat !== undefined && { lat: dto.lat }), ...(dto.lng !== undefined && { lng: dto.lng }),
         ...(dto.planId !== undefined && { planId: dto.planId }),
         ...(dto.planExpiresAt !== undefined && { planExpiresAt: dto.planExpiresAt ? new Date(dto.planExpiresAt) : null }),
       },

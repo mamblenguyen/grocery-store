@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Injectable, Module, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
-import { IsBoolean, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsNumber, IsOptional, IsString, Matches, Max, Min, MinLength, ValidateIf } from 'class-validator';
 import { Auth, CurrentUser } from '../common/decorators';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -9,6 +10,9 @@ class AddressDto {
   @IsString() @Matches(/^[0-9+\s]{9,15}$/, { message: 'Số điện thoại không hợp lệ' }) phone: string;
   @IsString() @MinLength(5) address: string;
   @IsOptional() @IsBoolean() isDefault?: boolean;
+  /** Toạ độ ghim trên bản đồ (để tài xế tìm đúng nhà) */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsNumber() @Min(-90) @Max(90) lat?: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsNumber() @Min(-180) @Max(180) lng?: number | null;
 }
 
 @Injectable()

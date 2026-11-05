@@ -6,6 +6,7 @@ import { CouponsService } from '../coupons/coupons.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.module';
 import { SettingsService } from '../settings/settings.service';
+import { DeliveryCoreService } from '../delivery/delivery-core.service';
 import { CreateOrderDto, PosOrderDto, PreviewOrderDto, QueryOrdersDto } from './dto/order.dto';
 
 /** Luồng trạng thái hợp lệ */
@@ -23,6 +24,11 @@ export const orderInclude = {
   store: { select: { id: true, slug: true, name: true } },
   createdBy: { select: { id: true, fullName: true } },
   payments: { orderBy: { createdAt: 'desc' } },
+  delivery: {
+    include: {
+      shipper: { select: { id: true, fullName: true, phone: true, shipperProfile: { select: { vehicleType: true, plateNumber: true } } } },
+    },
+  },
 } satisfies Prisma.OrderInclude;
 
 type Line = {
@@ -38,6 +44,7 @@ export class OrdersService {
     private prisma: PrismaService,
     private coupons: CouponsService,
     private settings: SettingsService,
+    private delivery: DeliveryCoreService,
     private notifications: NotificationsService,
   ) {}
 
@@ -137,6 +144,7 @@ export class OrdersService {
         data: {
           code, userId, channel: 'ONLINE', storeId: storeId(),
           customerName: dto.customerName, phone: dto.phone, address: dto.address, note: dto.note,
+          dropoffLat: dto.lat ?? null, dropoffLng: dto.lng ?? null,
           paymentMethod: method, deliveryDate, deliverySlot: dto.deliverySlot,
           subtotal: calc.subtotal, discount: calc.discount, shippingFee: calc.shippingFee, total: calc.total,
           couponCode: calc.couponCode,
@@ -292,6 +300,9 @@ export class OrdersService {
       }
       return tx.order.update({ where: { id }, data, include: orderInclude });
     });
+    // Giao hàng: xác nhận → tìm tài xế; huỷ → huỷ chuyến
+    if (updated.channel === 'ONLINE' && status === 'CONFIRMED') await this.delivery.requestFor(updated.id).catch(() => null);
+    if (status === 'CANCELLED') await this.delivery.cancelFor(updated.id, cancelReason ? `Đơn đã huỷ: ${cancelReason}` : undefined).catch(() => null);
     if (updated.userId && updated.channel === 'ONLINE' && updated.userId !== actorId) {
       const msg: Record<string, string> = {
         CONFIRMED: 'đã được xác nhận và đang chuẩn bị hàng',
@@ -304,7 +315,9 @@ export class OrdersService {
         data: { orderId: updated.id, status, url: `/orders/${updated.id}` },
       }));
     }
-    return updated;
+    return status === 'CONFIRMED' || status === 'CANCELLED'
+      ? this.prisma.order.findUniqueOrThrow({ where: { id }, include: orderInclude })
+      : updated;
   }
 
   async cancelMine(id: number, userId: number, reason?: string) {

@@ -9,7 +9,7 @@ import { useWishlist } from '@/context/wishlist';
 import { confirmAsync } from '@/lib/confirm';
 import { C } from '@/lib/theme';
 
-const ROLE: Record<string, string> = { SUPER_ADMIN: 'Quản trị nền tảng', ADMIN: 'Chủ cửa hàng', STAFF: 'Nhân viên', CUSTOMER: 'Khách hàng' };
+const ROLE: Record<string, string> = { SUPER_ADMIN: 'Quản trị nền tảng', ADMIN: 'Chủ cửa hàng', STAFF: 'Nhân viên', CUSTOMER: 'Khách hàng', SHIPPER: 'Tài xế giao hàng' };
 
 export default function AccountTab() {
   const { user, logout, isStaff, isSuper } = useAuth();
@@ -44,6 +44,11 @@ export default function AccountTab() {
           <ListItem icon="person-outline" title="Thông tin cá nhân" onPress={() => router.push('/account/profile')} />
           <Divider />
           <ListItem icon="key-outline" title="Đổi mật khẩu" onPress={() => router.push('/account/password')} />
+        </Card>
+      )}
+      {user?.role === 'SHIPPER' && (
+        <Card style={{ paddingVertical: 6 }}>
+          <ListItem icon="bicycle-outline" title="Nhận đơn giao hàng" subtitle="Đơn gần bạn, đang giao, thu nhập" onPress={() => router.push('/deliver')} />
         </Card>
       )}
       {(isStaff || isSuper) && (

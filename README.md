@@ -40,6 +40,27 @@ grocery-store/
 └── DEPLOY.md           # Hướng dẫn triển khai
 ```
 
+## 🛵 Giao hàng bằng tài xế của sàn (như Grab)
+
+**Luồng:** khách đặt đơn (có thể **ghim vị trí** bằng GPS / chạm bản đồ) → cửa hàng **xác nhận** → hệ thống tự **tìm tài xế** (báo cho tài xế đang trực tuyến) → tài xế **nhận đơn** (ai nhanh người đó được, tối đa 3 đơn cùng lúc) → đến cửa hàng **lấy hàng** (đơn tự chuyển "Đang giao") → **giao & thu COD** (đơn tự "Hoàn thành" + "Đã thanh toán") hoặc báo **giao không thành công** kèm lý do.
+
+| Ai | Ở đâu | Làm gì |
+|---|---|---|
+| **Tài xế** (`shipper@grocery.local`) | web `/shipper` (tối ưu điện thoại) · app tab **Nhận đơn** | Bật/tắt nhận đơn, xem đơn gần nhất (khoảng cách tới cửa hàng, thời gian ước tính, thu nhập, tiền thu hộ), nhận đơn, **chỉ đường Google Maps**, gọi cửa hàng/khách, xác nhận lấy hàng / giao, trả đơn, lịch sử & thu nhập hôm nay. Vị trí GPS được gửi tự động mỗi 15 giây khi đang trực tuyến / đang giao |
+| **Khách** | Trang đơn hàng (web + app) | Thấy tài xế (tên, biển số, nút gọi), tiến trình 4 bước, **bản đồ vị trí tài xế trực tiếp** (tự làm mới 10 giây) |
+| **Cửa hàng** | `/admin/orders/<id>` · Cài đặt → **Vị trí cửa hàng** | Theo dõi chuyến, gọi lại / huỷ gọi tài xế; ghim vị trí cửa hàng (điểm lấy hàng) |
+| **Super Admin** | `/super/shippers` | Thêm tài xế (phương tiện, biển số, CCCD, khu vực), khoá / mở, đặt lại mật khẩu, thống kê chuyến & thu nhập, giám sát mọi chuyến giao |
+
+- Thu nhập tài xế = phí ship của đơn (tối thiểu `SHIPPER_MIN_FEE`, mặc định 15.000₫ – sàn bù khi cửa hàng miễn phí ship). `SHIPPER_MAX_ACTIVE` (mặc định 3) = số đơn tối đa một tài xế giao cùng lúc.
+- Bảo mật: tài xế chỉ thấy SĐT/tên đầy đủ của khách **sau khi nhận đơn**; khách chỉ thấy tài xế của đơn mình.
+- Bản đồ: OpenStreetMap + Leaflet (miễn phí, không cần API key). Production nhiều lượt truy cập nên dùng nhà cung cấp tile riêng (MapTiler, Mapbox…) theo chính sách của OSM.
+
+## 🌐 Super Admin quản lý dữ liệu mọi đối tác
+
+Super Admin vào `/admin` (hoặc menu **Đơn hàng & sản phẩm (tất cả)** ở `/super`) → bộ lọc **Đối tác** trên header:
+- **🌐 Tất cả đối tác**: tổng quan, đơn hàng (xem, đổi trạng thái, xác nhận thanh toán, in hoá đơn), sản phẩm (bật/tắt, xoá), tồn kho, phiếu kho, khách hàng, báo cáo lợi nhuận, đánh giá của toàn sàn – mỗi dòng có nhãn cửa hàng.
+- Chọn **một đối tác** để bán hàng (POS), tạo/sửa sản phẩm, danh mục, mã giảm giá, nhập kho, nhân viên, cài đặt… (bấm "Sửa" một sản phẩm ở chế độ tất cả sẽ tự chuyển sang đúng đối tác).
+
 ## 🛍 Sàn thương mại điện tử + subdomain riêng cho đối tác
 
 - **Trang chủ sàn** (`/`): hàng hoá của **tất cả đối tác** – danh mục gộp, giá sốc, bán chạy, hàng mới, gợi ý; tìm & lọc trên toàn sàn (`/products`) để so giá giữa các cửa hàng. Mỗi sản phẩm ghi rõ cửa hàng bán.
@@ -51,6 +72,7 @@ grocery-store/
   - Thử ở máy: `NEXT_PUBLIC_ROOT_DOMAIN=lvh.me:3000` (mọi `*.lvh.me` trỏ về 127.0.0.1) rồi mở http://lvh.me:3000 và http://tap-hoa-xanh.lvh.me:3000; nhớ thêm `http://lvh.me:3000,http://*.lvh.me:3000` vào `CORS_ORIGIN` của backend.
   - Giỏ hàng lưu theo trình duyệt & tên miền: hàng thêm trên subdomain nằm ở giỏ của subdomain đó.
 - App: trang chủ là sàn (hàng của mọi cửa hàng), giỏ hàng chung chia theo cửa hàng, quét QR (kể cả link subdomain) để vào cửa hàng.
+- Ảnh minh hoạ sản phẩm mẫu (`frontend/public/products`) dùng đồ hoạ Twemoji © Twitter/X – CC-BY 4.0; ảnh thật do cửa hàng tự tải lên. DB cũ dùng ảnh ngẫu nhiên sẽ tự được thay khi chạy `npm run dev`.
 
 ## 🏢 Nền tảng đa cửa hàng
 
@@ -176,7 +198,8 @@ Các lệnh khác ở thư mục gốc: `npm run db:reset` (xoá DB & seed lại
 | Chủ cửa hàng *Tạp Hoá Xanh* (gói Chuyên nghiệp, 12 tháng) | admin@grocery.local | /admin |
 | Nhân viên *Tạp Hoá Xanh* | staff@grocery.local | /admin |
 | Chủ cửa hàng *Tạp Hoá Bà Năm* (gói Cơ bản, 1 tháng) | owner2@grocery.local | /admin |
-| Khách hàng | customer@grocery.local | / → chọn cửa hàng |
+| Khách hàng | customer@grocery.local | / (trang sàn) |
+| **Tài xế giao hàng** | shipper@grocery.local | /shipper · app tab "Nhận đơn" |
 
 Cửa hàng mẫu: http://localhost:3000/s/tap-hoa-xanh và http://localhost:3000/s/tap-hoa-ba-nam.
 Mã giảm giá mẫu: Tạp Hoá Xanh `WELCOME10` (giảm 10%, tối đa 50k, đơn từ 100k), `GIAM20K` (giảm 20k, đơn từ 200k); Bà Năm `BANAM5K`.
@@ -236,5 +259,5 @@ Trình duyệt chỉ cho mở camera trên **HTTPS** hoặc **http://localhost**
 
 ## ⚙️ Biến môi trường
 
-**backend/.env**: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `BLOB_READ_WRITE_TOKEN`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_URL`, `VNPAY_RETURN_URL`
+**backend/.env**: `SHIPPER_MIN_FEE`, `SHIPPER_MAX_ACTIVE` (giao hàng), `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `BLOB_READ_WRITE_TOKEN`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_URL`, `VNPAY_RETURN_URL`
 **frontend/.env.local**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_ROOT_DOMAIN` (bật subdomain cho đối tác), `NEXT_PUBLIC_PLATFORM_NAME` (tên nền tảng, mặc định "Chợ Tạp Hoá"), `NEXT_PUBLIC_PLATFORM_HOTLINE` (hiện ở trang giới thiệu cho đối tác)

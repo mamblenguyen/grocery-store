@@ -2,7 +2,8 @@
 import { ArrowLeft, CalendarDays, CircleDollarSign, CreditCard, MapPin, Phone, Printer, StickyNote, User } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { DeliveryTracker } from '@/components/DeliveryTracker';
 import { OrderTimeline } from '@/components/OrderTimeline';
 import { useToast } from '@/components/Toast';
 import { PaymentBadge, Spinner, StatusBadge } from '@/components/ui';
@@ -17,7 +18,16 @@ export default function AdminOrderDetail() {
   const { id } = useParams<{ id: string }>();
   const toast = useToast();
   const [o, setO] = useState<Order | null>(null);
-  useEffect(() => { api<Order>(`/admin/orders/${id}`).then(setO); }, [id]);
+  const load = useCallback(() => api<Order>(`/admin/orders/${id}`).then(setO), [id]);
+  useEffect(() => { load(); }, [load]);
+  // Đang giao → cập nhật vị trí tài xế mỗi 15 giây
+  const liveDelivery = o?.delivery && ['WAITING', 'ASSIGNED', 'PICKED_UP'].includes(o.delivery.status);
+  useEffect(() => { if (!liveDelivery) return; const t = setInterval(load, 15000); return () => clearInterval(t); }, [liveDelivery, load]);
+  const delivery = async (action: 'request' | 'cancel') => {
+    if (action === 'cancel' && !confirm('Huỷ gọi tài xế cho đơn này?')) return;
+    try { setO(await api<Order>(`/admin/orders/${id}/delivery/${action}`, { method: 'POST' })); toast(action === 'request' ? 'Đã gọi tài xế' : 'Đã huỷ gọi tài xế'); }
+    catch (e: any) { toast(e.message, 'error'); }
+  };
 
   const changeStatus = async (status: string) => {
     let cancelReason: string | undefined;
@@ -50,6 +60,14 @@ export default function AdminOrderDetail() {
         </div>
       </div>
       <div className="card"><OrderTimeline status={o.status} />{o.cancelReason && <p className="mt-4 text-center text-sm text-slate-500">Lý do huỷ: {o.cancelReason}</p>}</div>
+      {o.delivery ? (
+        <DeliveryTracker d={o.delivery} staff onRefresh={load} onRequest={() => delivery('request')} onCancel={() => delivery('cancel')} />
+      ) : o.channel === 'ONLINE' && ['CONFIRMED', 'SHIPPING'].includes(o.status) ? (
+        <div className="card flex flex-wrap items-center justify-between gap-3 text-sm">
+          <span className="text-slate-600">Đơn chưa có tài xế giao hàng của sàn.</span>
+          <button className="btn-primary btn-sm" onClick={() => delivery('request')}>🛵 Gọi tài xế</button>
+        </div>
+      ) : null}
 
       <div className="grid gap-5 xl:grid-cols-3">
         <div className="card p-0 xl:col-span-2">

@@ -8,6 +8,8 @@ import { useToast } from '@/components/Toast';
 import { Spinner } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 import { useCart } from '@/context/cart';
+import { LocationPicker } from '@/components/LocationPicker';
+import type { LatLng } from '@/lib/geo';
 import { useSettings } from '@/context/settings';
 import { api, imageUrl } from '@/lib/api';
 import { money } from '@/lib/format';
@@ -37,6 +39,7 @@ export default function CheckoutPage() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [pin, setPin] = useState<LatLng | null>(null);
 
   const lineItems = cart.items.map((i) => ({ variantId: i.variantId, quantity: i.quantity }));
   const days = useMemo(() => Array.from({ length: settings.deliveryDaysAhead + 1 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return d; }), [settings.deliveryDaysAhead]);
@@ -55,7 +58,7 @@ export default function CheckoutPage() {
     api<Address[]>('/addresses').then((list) => {
       setAddresses(list);
       const def = list.find((a) => a.isDefault) ?? list[0];
-      if (def) { setAddrId(def.id); setForm((f) => ({ ...f, customerName: def.fullName, phone: def.phone, address: def.address })); }
+      if (def) { setAddrId(def.id); setForm((f) => ({ ...f, customerName: def.fullName, phone: def.phone, address: def.address })); setPin(def.lat != null && def.lng != null ? { lat: def.lat, lng: def.lng } : null); }
       else setForm((f) => ({ ...f, customerName: user.fullName, phone: user.phone ?? '', address: user.address ?? '' }));
     });
   }, [user, loading, router]);
@@ -79,9 +82,11 @@ export default function CheckoutPage() {
     try {
       const order = await api<Order>('/orders', {
         method: 'POST',
-        json: { ...form, items: lineItems, couponCode: applied, paymentMethod: payment, ...(settings.deliverySlots.length && { deliveryDate, deliverySlot }) },
+        json: { ...form, items: lineItems, couponCode: applied, paymentMethod: payment, ...(settings.deliverySlots.length && { deliveryDate, deliverySlot }), ...(pin && { lat: pin.lat, lng: pin.lng }) },
       });
-      if (addrId === 'new' && !addresses.length) api('/addresses', { method: 'POST', json: { fullName: form.customerName, phone: form.phone, address: form.address, isDefault: true } }).catch(() => {});
+      if (addrId === 'new' && !addresses.length) api('/addresses', { method: 'POST', json: { fullName: form.customerName, phone: form.phone, address: form.address, isDefault: true, ...(pin && { lat: pin.lat, lng: pin.lng }) } }).catch(() => {});
+      const saved = addresses.find((a) => a.id === addrId);
+      if (saved && pin && (saved.lat !== pin.lat || saved.lng !== pin.lng)) api(`/addresses/${saved.id}`, { method: 'PATCH', json: { fullName: saved.fullName, phone: saved.phone, address: saved.address, lat: pin.lat, lng: pin.lng } }).catch(() => {});
       cart.clear();
       if (payment === 'VNPAY') {
         const { paymentUrl } = await api<{ paymentUrl: string }>('/payments/vnpay/create', { method: 'POST', json: { orderId: order.id } });
@@ -106,13 +111,13 @@ export default function CheckoutPage() {
               <div className="grid gap-2 sm:grid-cols-2">
                 {addresses.map((a) => (
                   <label key={a.id} className={`cursor-pointer rounded-xl border-2 p-3.5 text-sm transition ${addrId === a.id ? 'border-brand-600 bg-brand-50/50' : 'border-slate-200 hover:border-slate-300'}`}>
-                    <input type="radio" className="sr-only" checked={addrId === a.id} onChange={() => { setAddrId(a.id); setForm({ ...form, customerName: a.fullName, phone: a.phone, address: a.address }); }} />
+                    <input type="radio" className="sr-only" checked={addrId === a.id} onChange={() => { setAddrId(a.id); setForm({ ...form, customerName: a.fullName, phone: a.phone, address: a.address }); setPin(a.lat != null && a.lng != null ? { lat: a.lat, lng: a.lng } : null); }} />
                     <div className="font-semibold text-ink">{a.fullName} · {a.phone} {a.isDefault && <span className="badge ml-1 bg-brand-100 text-brand-800">Mặc định</span>}</div>
                     <div className="mt-1 text-slate-500">{a.label && <b>{a.label}: </b>}{a.address}</div>
                   </label>
                 ))}
                 <label className={`flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed p-3.5 text-sm font-medium transition ${addrId === 'new' ? 'border-brand-600 text-brand-700' : 'border-slate-200 text-slate-500'}`}>
-                  <input type="radio" className="sr-only" checked={addrId === 'new'} onChange={() => { setAddrId('new'); setForm({ ...form, customerName: user.fullName, phone: '', address: '' }); }} />+ Giao đến địa chỉ khác
+                  <input type="radio" className="sr-only" checked={addrId === 'new'} onChange={() => { setAddrId('new'); setForm({ ...form, customerName: user.fullName, phone: '', address: '' }); setPin(null); }} />+ Giao đến địa chỉ khác
                 </label>
               </div>
             )}
@@ -121,6 +126,7 @@ export default function CheckoutPage() {
               <div><label className="label">Số điện thoại *</label><input className="input" required inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
             </div>
             <div><label className="label">Địa chỉ chi tiết *</label><input className="input" required placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
+            <LocationPicker value={pin} onChange={setPin} title="Vị trí giao hàng" hint="Ghim đúng vị trí giúp tài xế tìm nhà nhanh và bạn theo dõi được tài xế trên bản đồ (không bắt buộc)." />
             <div><label className="label">Ghi chú cho cửa hàng</label><textarea className="input" rows={2} placeholder="VD: Gọi trước khi giao, chọn rau non…" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></div>
           </section>
 

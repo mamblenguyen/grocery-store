@@ -2,7 +2,8 @@
 import { ArrowLeft, CalendarDays, CreditCard, MapPin, PartyPopper, Printer, RefreshCw, StickyNote, Store } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { DeliveryTracker } from '@/components/DeliveryTracker';
 import { OrderTimeline } from '@/components/OrderTimeline';
 import { AccountShell } from '@/components/shop/AccountShell';
 import { BankTransferBox } from '@/components/shop/BankTransferBox';
@@ -28,7 +29,11 @@ function OrderDetailInner() {
   const [error, setError] = useState('');
   const [paying, setPaying] = useState(false);
 
-  useEffect(() => { api<Order>(`/orders/my/${id}`).then(setOrder).catch((e) => setError(e.message)); }, [id]);
+  const loadOrder = useCallback(() => api<Order>(`/orders/my/${id}`).then(setOrder).catch((e) => setError(e.message)), [id]);
+  useEffect(() => { loadOrder(); }, [loadOrder]);
+  // Theo dõi tài xế trực tiếp: làm mới mỗi 10 giây khi đang giao
+  const tracking = order?.delivery && ['WAITING', 'ASSIGNED', 'PICKED_UP'].includes(order.delivery.status);
+  useEffect(() => { if (!tracking) return; const t = setInterval(loadOrder, 10000); return () => clearInterval(t); }, [tracking, loadOrder]);
   const slug = order?.store?.slug;
   useEffect(() => { if (slug) api<StoreSettings>('/settings', { headers: { 'X-Store': slug } }).then(setSettings).catch(() => {}); }, [slug]);
 
@@ -87,6 +92,7 @@ function OrderDetailInner() {
           {order.cancelReason && <p className="mt-4 text-center text-sm text-slate-500">Lý do huỷ: {order.cancelReason}</p>}
         </div>
 
+        {order.delivery && <DeliveryTracker d={order.delivery} onRefresh={loadOrder} />}
         {unpaid && order.paymentMethod === 'BANK_TRANSFER' && <BankTransferBox code={order.code} amount={order.total} bank={settings.bank} />}
         {unpaid && settings.payment.vnpay && order.channel === 'ONLINE' && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4">

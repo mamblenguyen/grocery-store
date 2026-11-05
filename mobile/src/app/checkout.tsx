@@ -10,6 +10,7 @@ import { useAuth } from '@/context/auth';
 import { useCart } from '@/context/cart';
 import { useSettings } from '@/context/settings';
 import { api } from '@/lib/api';
+import { currentPosition, type LatLng } from '@/lib/geo';
 import { money, ymd } from '@/lib/format';
 import { C, R } from '@/lib/theme';
 import type { Address, Order } from '@/lib/types';
@@ -23,6 +24,7 @@ export default function Checkout() {
   const { settings } = useSettings();
   const cart = useCart();
   const insets = useSafeAreaInsets();
+  const [pin, setPin] = useState<LatLng | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addrId, setAddrId] = useState<number | 'new'>('new');
   const [form, setForm] = useState({ customerName: '', phone: '', address: '', note: '' });
@@ -51,7 +53,7 @@ export default function Checkout() {
     api<Address[]>('/addresses').then((l) => {
       setAddresses(l);
       const d = l.find((a) => a.isDefault) ?? l[0];
-      if (d) { setAddrId(d.id); setForm((f) => ({ ...f, customerName: d.fullName, phone: d.phone, address: d.address })); }
+      if (d) { setAddrId(d.id); setForm((f) => ({ ...f, customerName: d.fullName, phone: d.phone, address: d.address })); if (d.lat != null && d.lng != null) setPin({ lat: d.lat, lng: d.lng }); }
       else setForm((f) => ({ ...f, customerName: user.fullName, phone: user.phone ?? '', address: user.address ?? '' }));
     }).catch(() => {});
   }, [user, loading]);
@@ -67,7 +69,7 @@ export default function Checkout() {
     if (settings.deliverySlots.length && !slot) return setError('Vui lòng chọn khung giờ giao hàng');
     setBusy(true); setError('');
     try {
-      const order = await api<Order>('/orders', { method: 'POST', json: { ...form, items, couponCode: applied, paymentMethod: method, ...(settings.deliverySlots.length && { deliveryDate: day, deliverySlot: slot }) } });
+      const order = await api<Order>('/orders', { method: 'POST', json: { ...form, items, couponCode: applied, paymentMethod: method, ...(settings.deliverySlots.length && { deliveryDate: day, deliverySlot: slot }), ...(pin && { lat: pin.lat, lng: pin.lng }) } });
       if (addrId === 'new' && !addresses.length) api('/addresses', { method: 'POST', json: { fullName: form.customerName, phone: form.phone, address: form.address, isDefault: true } }).catch(() => {});
       cart.clear();
       if (method === 'VNPAY') {
@@ -102,6 +104,16 @@ export default function Checkout() {
               <Input testID="co-address" label="Địa chỉ" value={form.address} onChangeText={(v) => setForm({ ...form, address: v })} placeholder="Số nhà, đường, phường, quận, tỉnh" />
             </View>
           )}
+          {/* Ghim vị trí giao hàng bằng GPS – tài xế tìm nhà nhanh hơn */}
+          <Pressable testID="co-pin" onPress={async () => { try { setPin(await currentPosition()); toast('Đã ghim vị trí giao hàng'); } catch (e: any) { toast(e.message, 'error'); } }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: pin ? C.brand500 : C.line, borderRadius: 12, padding: 12, backgroundColor: pin ? C.brand50 : C.white }}>
+            <Ionicons name={pin ? 'location' : 'locate-outline'} size={20} color={pin ? C.brand700 : C.muted} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '700', color: C.ink }}>{pin ? 'Đã ghim vị trí giao hàng' : 'Ghim vị trí hiện tại (khuyên dùng)'}</Text>
+              <Text style={{ fontSize: 12, color: C.muted }}>{pin ? `${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)} · chạm để cập nhật` : 'Giúp tài xế tìm đúng nhà và bạn theo dõi tài xế'}</Text>
+            </View>
+            {pin && <Pressable hitSlop={8} onPress={() => setPin(null)}><Ionicons name="close-circle" size={20} color={C.faint} /></Pressable>}
+          </Pressable>
           <Input label="Ghi chú" value={form.note} onChangeText={(v) => setForm({ ...form, note: v })} placeholder="VD: gọi trước khi giao" />
         </Card>
 
