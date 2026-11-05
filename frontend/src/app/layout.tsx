@@ -10,6 +10,7 @@ import '@fontsource/be-vietnam-pro/latin-600.css';
 import '@fontsource/be-vietnam-pro/latin-700.css';
 import '@fontsource/be-vietnam-pro/latin-800.css';
 import { AuthProvider } from '@/context/auth';
+import { CartProvider } from '@/context/cart';
 import { WishlistProvider } from '@/context/wishlist';
 import { ToastProvider } from '@/components/Toast';
 import { PLATFORM_NAME } from '@/lib/platform';
@@ -28,7 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ToastProvider>
           <AuthProvider>
-            <WishlistProvider>{children}</WishlistProvider>
+            <WishlistProvider>
+              <CartProvider>{children}</CartProvider>
+            </WishlistProvider>
           </AuthProvider>
         </ToastProvider>
       </body>

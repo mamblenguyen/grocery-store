@@ -1,11 +1,36 @@
+import { cookieDomain } from './platform';
+
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 const ASSET_BASE = API_URL.replace(/\/api\/?$/, '');
 const TOKEN_KEY = 'grocery_token';
 
+/**
+ * Token đăng nhập. Khi bật subdomain, lưu thêm cookie trên tên miền gốc để
+ * đăng nhập 1 lần dùng được ở sàn và mọi subdomain cửa hàng.
+ */
+function readCookie(name: string) {
+  const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function writeCookie(name: string, value: string, maxAge: number) {
+  const domain = cookieDomain();
+  if (!domain) return;
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${name}=${encodeURIComponent(value)}; Domain=${domain}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
+}
 export const tokenStore = {
-  get: () => (typeof window === 'undefined' ? null : localStorage.getItem(TOKEN_KEY)),
-  set: (t: string) => localStorage.setItem(TOKEN_KEY, t),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
+  get: () => {
+    if (typeof window === 'undefined') return null;
+    if (cookieDomain()) {
+      const c = readCookie(TOKEN_KEY);
+      if (c) return c;
+      // đã đăng xuất ở subdomain khác → cookie bị xoá, bỏ luôn bản lưu cục bộ
+      if (localStorage.getItem(TOKEN_KEY) && readCookie(`${TOKEN_KEY}_set`)) { localStorage.removeItem(TOKEN_KEY); return null; }
+    }
+    return localStorage.getItem(TOKEN_KEY);
+  },
+  set: (t: string) => { localStorage.setItem(TOKEN_KEY, t); writeCookie(TOKEN_KEY, t, 60 * 60 * 24 * 30); writeCookie(`${TOKEN_KEY}_set`, '1', 60 * 60 * 24 * 365); },
+  clear: () => { localStorage.removeItem(TOKEN_KEY); writeCookie(TOKEN_KEY, '', 0); },
 };
 
 const ACTING_KEY = 'grocery_acting_store';

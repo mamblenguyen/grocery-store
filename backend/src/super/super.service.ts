@@ -17,7 +17,7 @@ export const addMonths = (d: Date, m: number) => {
 };
 
 const storeListSelect = {
-  id: true, slug: true, name: true, phone: true, email: true, address: true, logo: true, status: true,
+  id: true, slug: true, name: true, businessName: true, representative: true, phone: true, email: true, address: true, logo: true, status: true,
   planId: true, planExpiresAt: true, note: true, createdAt: true,
   plan: { select: { id: true, code: true, name: true, priceMonthly: true, maxProducts: true, maxStaff: true } },
   _count: { select: { products: true, orders: true, members: true } },
@@ -25,7 +25,21 @@ const storeListSelect = {
 
 const memberSelect = { id: true, email: true, fullName: true, phone: true, role: true, isActive: true, createdAt: true } satisfies Prisma.UserSelect;
 
-export interface CreateStoreInput {
+/** Thông tin đối tác (pháp lý, đối soát, hợp đồng) */
+export const PARTNER_FIELDS = [
+  'businessName', 'businessType', 'taxCode', 'businessAddress', 'representative', 'representativeId', 'representativePhone',
+  'bankName', 'bankAccountNo', 'bankAccountName', 'contractNo',
+] as const;
+export type PartnerInfo = Partial<Record<(typeof PARTNER_FIELDS)[number], string | null>> & { contractSignedAt?: string | null };
+
+function partnerData(dto: PartnerInfo) {
+  const out: Record<string, unknown> = {};
+  for (const k of PARTNER_FIELDS) if (dto[k] !== undefined) out[k] = dto[k] === '' ? null : dto[k]?.trim();
+  if (dto.contractSignedAt !== undefined) out.contractSignedAt = dto.contractSignedAt ? new Date(dto.contractSignedAt) : null;
+  return out;
+}
+
+export interface CreateStoreInput extends PartnerInfo {
   name: string; slug?: string; phone?: string; email?: string; address?: string; note?: string;
   planId?: number; months?: number; amount?: number; method?: string;
   owner: { email: string; password?: string; fullName: string; phone?: string };
@@ -126,6 +140,7 @@ export class SuperService {
         OR: [
           { name: { contains: q.search } }, { slug: { contains: q.search } }, { phone: { contains: q.search } },
           { email: { contains: q.search } }, { members: { some: { email: { contains: q.search } } } },
+          { businessName: { contains: q.search } }, { taxCode: { contains: q.search } }, { representative: { contains: q.search } },
         ],
       }),
     };
@@ -167,7 +182,7 @@ export class SuperService {
       const store = await tx.store.create({
         data: {
           slug, name: dto.name.trim(), phone: dto.phone, email: dto.email, address: dto.address, note: dto.note,
-          planId: plan?.id, planExpiresAt: expires,
+          planId: plan?.id, planExpiresAt: expires, ...partnerData(dto),
         },
       });
       if (existing) {
@@ -191,6 +206,7 @@ export class SuperService {
       where: { id },
       select: {
         ...storeListSelect,
+        ...Object.fromEntries([...PARTNER_FIELDS, 'contractSignedAt'].map((k) => [k, true])),
         members: { select: memberSelect, orderBy: [{ role: 'asc' }, { createdAt: 'asc' }] },
         payments: { orderBy: { createdAt: 'desc' }, take: 50, include: { plan: { select: { name: true } }, createdBy: { select: { fullName: true } } } },
       },
@@ -212,7 +228,7 @@ export class SuperService {
     };
   }
 
-  async updateStore(id: number, dto: {
+  async updateStore(id: number, dto: PartnerInfo & {
     name?: string; slug?: string; phone?: string; email?: string; address?: string; logo?: string; note?: string;
     status?: StoreStatus; planId?: number | null; planExpiresAt?: string | null;
   }) {
@@ -224,7 +240,7 @@ export class SuperService {
       where: { id },
       data: {
         name: dto.name?.trim() || undefined, slug, phone: dto.phone, email: dto.email, address: dto.address, logo: dto.logo, note: dto.note,
-        status: dto.status,
+        status: dto.status, ...partnerData(dto),
         ...(dto.planId !== undefined && { planId: dto.planId }),
         ...(dto.planExpiresAt !== undefined && { planExpiresAt: dto.planExpiresAt ? new Date(dto.planExpiresAt) : null }),
       },

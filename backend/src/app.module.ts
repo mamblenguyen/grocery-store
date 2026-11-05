@@ -23,6 +23,7 @@ import { AddressesModule } from './addresses/addresses.module';
 import { StockModule } from './stock/stock.module';
 import { SuperModule } from './super/super.module';
 import { StoresModule } from './stores/stores.module';
+import { MarketModule } from './market/market.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { StoresModule } from './stores/stores.module';
     StockModule,
     SuperModule,
     StoresModule,
+    MarketModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

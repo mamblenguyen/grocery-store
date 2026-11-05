@@ -4,12 +4,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { AuthShell } from '@/components/shop/AuthShell';
 import { useAuth } from '@/context/auth';
-import { lastStore } from '@/context/store';
+import { isOwnUrl } from '@/lib/platform';
 
 function RegisterInner() {
   const { register } = useAuth();
   const router = useRouter();
-  const next = useSearchParams().get('next');
+  const rawNext = useSearchParams().get('next');
+  // next có thể là link tuyệt đối về subdomain cửa hàng (chỉ chấp nhận tên miền của sàn)
+  const next = rawNext && (rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : isOwnUrl(rawNext) ? rawNext : null);
+  const go = (to: string) => (/^https?:/.test(to) ? window.location.assign(to) : router.push(to));
   const [form, setForm] = useState({ fullName: '', email: '', phone: '', password: '', confirm: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,7 +21,7 @@ function RegisterInner() {
     e.preventDefault();
     if (form.password !== form.confirm) return setError('Mật khẩu nhập lại không khớp');
     setLoading(true);
-    try { const { confirm, ...data } = form; await register(data); router.push(next || (lastStore.get() ? `/s/${lastStore.get()!.slug}` : '/')); }
+    try { const { confirm, ...data } = form; await register(data); go(next || '/'); }
     catch (e: any) { setError(e.message); } finally { setLoading(false); }
   };
   const f = (k: keyof typeof form, label: string, type = 'text', required = true, auto?: string) => (

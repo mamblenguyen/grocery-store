@@ -10,7 +10,7 @@ import { PLATFORM_NAME } from '@/lib/platform';
 
 const MENU = [
   { href: '/super', label: 'Tổng quan', icon: LayoutDashboard },
-  { href: '/super/stores', label: 'Đối tác / cửa hàng', icon: Store },
+  { href: '/super/stores', label: 'Đối tác', icon: Store },
   { href: '/super/plans', label: 'Gói dịch vụ', icon: BadgeCheck },
   { href: '/super/payments', label: 'Phiếu thu phí', icon: ReceiptText },
   { href: '/super/users', label: 'Người dùng', icon: Users },

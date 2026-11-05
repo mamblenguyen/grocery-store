@@ -12,6 +12,7 @@ import { useAuth } from '@/context/auth';
 import { useToast } from '@/components/Toast';
 import { SettingsProvider, useSettings } from '@/context/settings';
 import { actingStore, setApiStore } from '@/lib/api';
+import { storeUrl } from '@/lib/platform';
 import { ROLES } from '@/lib/format';
 
 const GROUPS = [
@@ -157,7 +158,7 @@ function AdminShell({ children }: { children: React.ReactNode }) {
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <NotificationBell allHref="/account/notifications" dark />
             <Link href="/admin/pos" className="btn-primary btn-sm hidden sm:inline-flex"><Store className="h-4 w-4" /> Bán hàng</Link>
-            <Link href={storeSlug ? `/s/${storeSlug}` : '/'} target="_blank" className="btn-outline btn-sm"><ExternalLink className="h-4 w-4" /><span className="hidden sm:inline">Xem cửa hàng</span></Link>
+            <Link href={storeSlug ? storeUrl(storeSlug) : '/'} target="_blank" className="btn-outline btn-sm"><ExternalLink className="h-4 w-4" /><span className="hidden sm:inline">Xem cửa hàng</span></Link>
           </div>
         </header>
         <main className="p-4 sm:p-6">{children}</main>

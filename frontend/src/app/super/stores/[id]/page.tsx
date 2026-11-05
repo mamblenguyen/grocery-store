@@ -7,8 +7,10 @@ import { useToast } from '@/components/Toast';
 import { Modal, Spinner, StatCard } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 import { api } from '@/lib/api';
+import { storeUrl } from '@/lib/platform';
 import { date, money, num, ROLES } from '@/lib/format';
-import { expiryInfo, METHODS, STORE_STATUS, type StorePaymentRow, type SuperStore } from '@/lib/super';
+import { PartnerFields, partnerPayload, type PartnerForm } from '@/components/super/PartnerFields';
+import { BUSINESS_TYPES, EMPTY_PARTNER, expiryInfo, METHODS, STORE_STATUS, type StorePaymentRow, type SuperStore } from '@/lib/super';
 import type { Plan, StoreStatus, User } from '@/lib/types';
 
 type Detail = SuperStore & {
@@ -31,6 +33,7 @@ export default function SuperStoreDetail() {
   const [manual, setManual] = useState<{ planId: string; planExpiresAt: string } | null>(null);
   const [member, setMember] = useState<{ email: string; password: string; fullName: string; phone: string; role: 'ADMIN' | 'STAFF' } | null>(null);
   const [pwd, setPwd] = useState<{ u: User; value: string } | null>(null);
+  const [partner, setPartner] = useState<PartnerForm | null>(null);
 
   const apply = (d: Detail) => {
     setS(d);
@@ -63,10 +66,10 @@ export default function SuperStoreDetail() {
       <div className="card flex flex-wrap items-center gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-bold">{s.name}</h1><span className={`badge ${st.cls}`}>{st.label}</span></div>
-          <div className="mt-1 text-sm text-slate-500">/s/{s.slug} · Tạo ngày {date(s.createdAt)}</div>
+          <div className="mt-1 text-sm text-slate-500">{storeUrl(s.slug).replace(/^https?:\/\//, '')} · Tạo ngày {date(s.createdAt)}</div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <a href={`/s/${s.slug}`} target="_blank" className="btn-outline btn-sm"><ExternalLink className="h-4 w-4" /> Xem cửa hàng</a>
+          <a href={storeUrl(s.slug)} target="_blank" className="btn-outline btn-sm"><ExternalLink className="h-4 w-4" /> Xem cửa hàng</a>
           <button className="btn-primary btn-sm" onClick={() => { setActing({ id: s.id, slug: s.slug, name: s.name }); router.push('/admin'); }}><ShieldCheck className="h-4 w-4" /> Quản trị hộ</button>
           {s.status !== 'ACTIVE' && <button className="btn-outline btn-sm text-green-700" onClick={() => setStatus('ACTIVE')}><Play className="h-4 w-4" /> Kích hoạt</button>}
           {s.status === 'ACTIVE' && <button className="btn-outline btn-sm text-amber-700" onClick={() => setStatus('SUSPENDED')}><Pause className="h-4 w-4" /> Tạm ngưng</button>}
@@ -79,6 +82,25 @@ export default function SuperStoreDetail() {
         <StatCard tone="sky" icon={<span className="font-bold">Σ</span>} label="Tổng doanh số" value={money(s.stats.revenue)} hint={`${num(s.stats.orders)} đơn (không tính huỷ)`} />
         <StatCard tone="violet" icon={<span className="font-bold">SP</span>} label="Sản phẩm / biến thể" value={`${s._count.products} / ${s.stats.variants}`} hint={s.plan?.maxProducts ? `Giới hạn gói ${s.plan.maxProducts}` : 'Không giới hạn'} />
         <StatCard tone="accent" icon={<span className="font-bold">KH</span>} label="Khách đã mua online" value={num(s.stats.customers)} hint={`${s._count.members} tài khoản quản trị`} />
+      </div>
+
+      <div className="card">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="font-bold">Thông tin đối tác</h2>
+          <button className="btn-outline btn-sm" onClick={() => setPartner(Object.fromEntries(Object.keys(EMPTY_PARTNER).map((k) => [k, k === 'contractSignedAt' ? toInputDate(s.contractSignedAt ?? null) : (s as any)[k] ?? (k === 'businessType' ? 'HKD' : '')])) as PartnerForm)}>Sửa thông tin đối tác</button>
+        </div>
+        <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+          {([
+            ['Loại hình', s.businessType ? BUSINESS_TYPES[s.businessType] ?? s.businessType : null],
+            ['Tên doanh nghiệp / HKD', s.businessName], ['Mã số thuế', s.taxCode], ['Địa chỉ đăng ký', s.businessAddress],
+            ['Người đại diện', s.representative], ['CCCD', s.representativeId], ['SĐT người đại diện', s.representativePhone],
+            ['Tài khoản đối soát', s.bankAccountNo ? `${s.bankAccountNo}${s.bankName ? ` · ${s.bankName}` : ''}` : null], ['Chủ tài khoản', s.bankAccountName],
+            ['Số hợp đồng', s.contractNo], ['Ngày ký', s.contractSignedAt ? date(s.contractSignedAt) : null],
+            ['Website riêng', storeUrl(s.slug).replace(/^https?:\/\//, '')],
+          ] as [string, string | null | undefined][]).map(([k, v]) => (
+            <div key={k} className="min-w-0"><dt className="text-slate-500">{k}</dt><dd className="truncate font-medium text-ink">{v || <span className="font-normal text-slate-300">Chưa có</span>}</dd></div>
+          ))}
+        </dl>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -191,6 +213,15 @@ export default function SuperStoreDetail() {
               <div><label className="label">Vai trò</label><select className="input" value={member.role} onChange={(ev) => setMember({ ...member, role: ev.target.value as 'STAFF' })}><option value="STAFF">{ROLES.STAFF}</option><option value="ADMIN">{ROLES.ADMIN}</option></select></div>
             </div>
             <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setMember(null)}>Huỷ</button><button className="btn-primary">Thêm</button></div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal open={!!partner} onClose={() => setPartner(null)} title="Thông tin đối tác" size="lg">
+        {partner && (
+          <form className="space-y-4" onSubmit={async (ev) => { ev.preventDefault(); if (await patch(partnerPayload(partner), 'Đã lưu thông tin đối tác')) setPartner(null); }}>
+            <PartnerFields value={partner} onChange={setPartner} />
+            <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setPartner(null)}>Huỷ</button><button className="btn-primary">Lưu</button></div>
           </form>
         )}
       </Modal>

@@ -521,8 +521,22 @@ model Store {
   /// null = không thời hạn
   planExpiresAt DateTime?
   note          String?     @db.Text
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+
+  /// ── Thông tin đối tác (pháp lý, đối soát, hợp đồng) – chỉ super admin xem/sửa
+  businessName        String? /// Tên doanh nghiệp / hộ kinh doanh
+  businessType        String? /// HKD | CONG_TY | CA_NHAN
+  taxCode             String?
+  businessAddress     String?   @db.Text
+  representative      String? /// Người đại diện
+  representativeId    String? /// Số CCCD người đại diện
+  representativePhone String?
+  bankName            String?
+  bankAccountNo       String?
+  bankAccountName     String?
+  contractNo          String?
+  contractSignedAt    DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   members        User[]           @relation("StoreMembers")
   categories     Category[]

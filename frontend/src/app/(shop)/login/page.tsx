@@ -5,12 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { AuthShell } from '@/components/shop/AuthShell';
 import { useAuth } from '@/context/auth';
-import { lastStore } from '@/context/store';
+import { isOwnUrl } from '@/lib/platform';
 
 function LoginInner() {
   const { login } = useAuth();
   const router = useRouter();
-  const next = useSearchParams().get('next');
+  const rawNext = useSearchParams().get('next');
+  // next có thể là link tuyệt đối về subdomain cửa hàng (chỉ chấp nhận tên miền của sàn)
+  const next = rawNext && (rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : isOwnUrl(rawNext) ? rawNext : null);
+  const go = (to: string) => (/^https?:/.test(to) ? window.location.assign(to) : router.push(to));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
@@ -22,8 +25,7 @@ function LoginInner() {
     setLoading(true); setError('');
     try {
       const u = await login(email, password);
-      const last = lastStore.get();
-      router.push(u.role === 'SUPER_ADMIN' ? next || '/super' : u.role === 'CUSTOMER' ? next || (last ? `/s/${last.slug}` : '/') : next || '/admin');
+      go(u.role === 'SUPER_ADMIN' ? next || '/super' : u.role === 'CUSTOMER' ? next || '/' : next || '/admin');
     }
     catch (e: any) { setError(e.message); } finally { setLoading(false); }
   };

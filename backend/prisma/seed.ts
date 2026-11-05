@@ -228,11 +228,16 @@ async function main() {
   const pwd = await bcrypt.hash('123456', 10);
   // Cửa hàng 1: đầy đủ sản phẩm
   const s1 = await prisma.store.create({
-    data: { slug: 'tap-hoa-xanh', name: 'Tạp Hoá Xanh', phone: '1900 1234', address: '123 Lê Lợi, Quận 1, TP. Hồ Chí Minh', planId: pro.id, planExpiresAt: monthsFromNow(12) },
+    data: { slug: 'tap-hoa-xanh', name: 'Tạp Hoá Xanh', phone: '1900 1234', address: '123 Lê Lợi, Quận 1, TP. Hồ Chí Minh', planId: pro.id, planExpiresAt: monthsFromNow(12),
+      businessName: 'Công ty TNHH Tạp Hoá Xanh', businessType: 'CONG_TY', taxCode: '0312345678', businessAddress: '123 Lê Lợi, Quận 1, TP. Hồ Chí Minh',
+      representative: 'Trần Văn Xanh', representativeId: '079088001234', representativePhone: '0903111222',
+      bankName: 'Vietcombank', bankAccountNo: '1234567890', bankAccountName: 'CONG TY TNHH TAP HOA XANH', contractNo: 'HD-2026-001', contractSignedAt: new Date() },
   });
   // Cửa hàng 2: ít sản phẩm, giá khác, gói cơ bản
   const s2 = await prisma.store.create({
-    data: { slug: 'tap-hoa-ba-nam', name: 'Tạp Hoá Bà Năm', phone: '0908 555 666', address: '45 Nguyễn Trãi, Quận 5, TP. Hồ Chí Minh', planId: basic.id, planExpiresAt: monthsFromNow(1) },
+    data: { slug: 'tap-hoa-ba-nam', name: 'Tạp Hoá Bà Năm', phone: '0908 555 666', address: '45 Nguyễn Trãi, Quận 5, TP. Hồ Chí Minh', planId: basic.id, planExpiresAt: monthsFromNow(1),
+      businessName: 'Hộ kinh doanh Nguyễn Thị Năm', businessType: 'HKD', taxCode: '8012345678', representative: 'Nguyễn Thị Năm', representativeId: '079175004567',
+      representativePhone: '0908555666', bankName: 'MB Bank', bankAccountNo: '0908555666', bankAccountName: 'NGUYEN THI NAM', contractNo: 'HD-2026-002', contractSignedAt: new Date() },
   });
   for (const [s, plan, months] of [[s1, pro, 12], [s2, basic, 1]] as const)
     await prisma.storePayment.create({

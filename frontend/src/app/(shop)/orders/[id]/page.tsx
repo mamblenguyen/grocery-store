@@ -8,7 +8,7 @@ import { AccountShell } from '@/components/shop/AccountShell';
 import { BankTransferBox } from '@/components/shop/BankTransferBox';
 import { useToast } from '@/components/Toast';
 import { PaymentBadge, Spinner, StatusBadge } from '@/components/ui';
-import { addToStoredCart, type CartItem } from '@/context/cart';
+import { useAllCarts, type CartItem } from '@/context/cart';
 import { FALLBACK_SETTINGS } from '@/context/settings';
 import { api, imageUrl } from '@/lib/api';
 import { dateOnly, dateTime, money, PAYMENT_METHOD } from '@/lib/format';
@@ -21,6 +21,7 @@ function OrderDetailInner() {
   const success = useSearchParams().get('success');
   const toast = useToast();
   const router = useRouter();
+  const carts = useAllCarts();
   // Cài đặt của cửa hàng bán đơn này (tài khoản ngân hàng, VNPay…)
   const [settings, setSettings] = useState<StoreSettings>(FALLBACK_SETTINGS);
   const [order, setOrder] = useState<Order | null>(null);
@@ -56,7 +57,7 @@ function OrderDetailInner() {
         add.push({ variantId: l.variantId, productId: l.productId, slug: l.slug, productName: l.productName, variantName: l.variantName, image: l.image, price: l.price, stock: l.stock, quantity: l.quantity });
       } catch { /* hết hàng / ngừng bán → bỏ qua */ }
     }
-    if (add.length) { addToStoredCart(slug, add); toast(`Đã thêm ${add.length}/${items.length} sản phẩm vào giỏ`); router.push(`/s/${slug}/cart`); }
+    if (add.length) { add.forEach(({ quantity, ...it }) => carts.addTo({ slug, name: order!.store!.name }, it, quantity)); toast(`Đã thêm ${add.length}/${items.length} sản phẩm vào giỏ`); router.push(`/s/${slug}/cart`); }
     else toast('Các sản phẩm trong đơn hiện đã hết hàng', 'error');
   };
 

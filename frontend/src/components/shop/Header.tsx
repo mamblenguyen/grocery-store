@@ -13,6 +13,7 @@ import { useWishlist } from '@/context/wishlist';
 import { NotificationBell } from '@/components/NotificationBell';
 import { api, imageUrl } from '@/lib/api';
 import { money } from '@/lib/format';
+import { PLATFORM_NAME, platformUrl } from '@/lib/platform';
 import type { Category, Paged, Product } from '@/lib/types';
 
 export function Logo({ light = false }: { light?: boolean }) {
@@ -153,7 +154,7 @@ export function Header() {
             <div className="hidden shrink-0 items-center gap-5 text-brand-100 md:flex">
               {settings.openingHours && <span>🕒 {settings.openingHours}</span>}
               <Link href="/orders" className="hover:text-white">Tra cứu đơn hàng</Link>
-              <Link href="/" className="hover:text-white">Cửa hàng khác</Link>
+              <a href={platformUrl("/")} className="hover:text-white">Về sàn {PLATFORM_NAME}</a>
             </div>
           </div>
         </div>
@@ -226,7 +227,7 @@ export function Header() {
             </div>
             <div className="border-t border-slate-100 p-3">
               <Link href="/orders" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-slate-50"><Package className="h-4 w-4 text-slate-400" /> Đơn hàng của tôi</Link>
-              <Link href="/" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-slate-50"><Store className="h-4 w-4 text-slate-400" /> Xem cửa hàng khác</Link>
+              <a href={platformUrl("/")} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-slate-50"><Store className="h-4 w-4 text-slate-400" /> Về sàn {PLATFORM_NAME}</a>
             </div>
             {settings.hotline && <a href={`tel:${settings.hotline}`} className="m-3 btn-primary"><Phone className="h-4 w-4" /> Gọi {settings.hotline}</a>}
           </div>

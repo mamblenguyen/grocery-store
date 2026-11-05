@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { Spinner } from '@/components/ui';
 import { api } from '@/lib/api';
+import { ROOT_DOMAIN, storeUrl } from '@/lib/platform';
 import { date, money } from '@/lib/format';
 import type { Plan } from '@/lib/types';
 
@@ -30,7 +31,7 @@ export default function SubscriptionPage() {
   const [err, setErr] = useState('');
   const [qr, setQr] = useState('');
   useEffect(() => { api<Sub>('/admin/subscription').then(setD).catch((e) => setErr(e.message)); }, []);
-  const link = d ? `${typeof window !== 'undefined' ? window.location.origin : ''}/s/${d.store.slug}` : '';
+  const link = d ? (ROOT_DOMAIN ? storeUrl(d.store.slug) : `${typeof window !== 'undefined' ? window.location.origin : ''}/s/${d.store.slug}`) : '';
   useEffect(() => { if (link) QRCode.toDataURL(link, { margin: 1, width: 360 }).then(setQr); }, [link]);
   if (err) return <div className="card text-center text-slate-500">{err}</div>;
   if (!d) return <Spinner />;

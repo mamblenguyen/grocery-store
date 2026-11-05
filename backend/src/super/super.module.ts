@@ -50,6 +50,18 @@ class CreateStoreDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) amount?: number;
   @IsOptional() @IsString() method?: string;
   @ValidateNested() @Type(() => OwnerDto) owner: OwnerDto;
+  @IsOptional() @IsString() businessName?: string;
+  @IsOptional() @IsIn(['HKD', 'CONG_TY', 'CA_NHAN', '']) businessType?: string;
+  @IsOptional() @IsString() taxCode?: string;
+  @IsOptional() @IsString() businessAddress?: string;
+  @IsOptional() @IsString() representative?: string;
+  @IsOptional() @IsString() representativeId?: string;
+  @IsOptional() @IsString() representativePhone?: string;
+  @IsOptional() @IsString() bankName?: string;
+  @IsOptional() @IsString() bankAccountNo?: string;
+  @IsOptional() @IsString() bankAccountName?: string;
+  @IsOptional() @IsString() contractNo?: string;
+  @IsOptional() @ValidateIf((_, v) => v !== null && v !== '') @IsDateString() contractSignedAt?: string | null;
 }
 
 class UpdateStoreDto {
@@ -63,6 +75,18 @@ class UpdateStoreDto {
   @IsOptional() @IsIn(Object.values(StoreStatus)) status?: StoreStatus;
   @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() planId?: number | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsDateString() planExpiresAt?: string | null;
+  @IsOptional() @IsString() businessName?: string;
+  @IsOptional() @IsIn(['HKD', 'CONG_TY', 'CA_NHAN', '']) businessType?: string;
+  @IsOptional() @IsString() taxCode?: string;
+  @IsOptional() @IsString() businessAddress?: string;
+  @IsOptional() @IsString() representative?: string;
+  @IsOptional() @IsString() representativeId?: string;
+  @IsOptional() @IsString() representativePhone?: string;
+  @IsOptional() @IsString() bankName?: string;
+  @IsOptional() @IsString() bankAccountNo?: string;
+  @IsOptional() @IsString() bankAccountName?: string;
+  @IsOptional() @IsString() contractNo?: string;
+  @IsOptional() @ValidateIf((_, v) => v !== null && v !== '') @IsDateString() contractSignedAt?: string | null;
 }
 
 class RenewDto {

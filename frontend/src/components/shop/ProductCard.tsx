@@ -1,11 +1,11 @@
 'use client';
-import { storeHref, useStoreSlug } from '@/context/store';
-import { Heart, Plus, ShoppingCart } from 'lucide-react';
+import { storeHref, useStoreHref, useStoreSlug } from '@/context/store';
+import { Heart, Plus, ShoppingCart, Store } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
 import { Stars } from '@/components/ui';
-import { useOptionalCart } from '@/context/cart';
+import { useAllCarts, useOptionalCart } from '@/context/cart';
 import { useWishlist } from '@/context/wishlist';
 import { imageUrl } from '@/lib/api';
 import { money } from '@/lib/format';
@@ -13,9 +13,14 @@ import type { Product } from '@/lib/types';
 
 export function ProductCard({ p }: { p: Product }) {
   // Trong cửa hàng: link theo cửa hàng hiện tại; ở trang chung (yêu thích): theo cửa hàng của sản phẩm
-  const slug = useStoreSlug() ?? p.store?.slug ?? null;
-  const sh = (path: string) => (slug ? storeHref(slug, path) : '/');
+  const current = useStoreSlug();
+  const inStore = useStoreHref();
+  const slug = current ?? p.store?.slug ?? null;
+  const sh = (path: string) => (current ? inStore(path) : slug ? storeHref(slug, path) : '/');
   const cart = useOptionalCart();
+  const all = useAllCarts();
+  // Trên sàn (ngoài cửa hàng): thêm thẳng vào giỏ của cửa hàng bán sản phẩm
+  const market = !current && !!p.store;
   const wl = useWishlist();
   const toast = useToast();
   const router = useRouter();
@@ -31,10 +36,15 @@ export function ProductCard({ p }: { p: Product }) {
 
   const quickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!single || !cart) return router.push(sh(`/products/${p.slug}`));
-    const inCart = cart.items.find((i) => i.variantId === single.id)?.quantity ?? 0;
+    if (!single || (!cart && !market)) return router.push(sh(`/products/${p.slug}`));
+    const line = { variantId: single.id, productId: p.id, slug: p.slug, productName: p.name, variantName: single.name, image: p.thumbnail, price: single.price, stock: single.stock };
+    if (market) {
+      if (!all.addTo({ slug: p.store!.slug, name: p.store!.name }, line)) return toast(`Chỉ còn ${single.stock} sản phẩm`, 'error');
+      return toast(`Đã thêm "${p.name}" vào giỏ ${p.store!.name}`);
+    }
+    const inCart = cart!.items.find((i) => i.variantId === single.id)?.quantity ?? 0;
     if (inCart >= single.stock) return toast(`Chỉ còn ${single.stock} sản phẩm`, 'error');
-    cart.add({ variantId: single.id, productId: p.id, slug: p.slug, productName: p.name, variantName: single.name, image: p.thumbnail, price: single.price, stock: single.stock });
+    cart!.add(line);
     toast(`Đã thêm "${p.name}" vào giỏ`);
   };
 
@@ -61,7 +71,9 @@ export function ProductCard({ p }: { p: Product }) {
         )}
       </div>
       <div className="flex flex-1 flex-col p-3.5">
-        <div className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">{p.brand || p.category?.name}</div>
+        {market ? (
+          <div className="flex min-w-0 items-center gap-1 text-[11px] font-semibold text-brand-700"><Store className="h-3 w-3 shrink-0" /><span className="truncate">{p.store!.name}</span></div>
+        ) : <div className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">{p.brand || p.category?.name}</div>}
         <h3 className="mt-0.5 line-clamp-2 min-h-10 text-sm leading-5 font-semibold text-ink group-hover:text-brand-700">{p.name}</h3>
         <div className="mt-1.5 flex h-4 items-center gap-1.5 text-xs text-slate-400">
           {p.ratingCount > 0 && <><Stars value={p.ratingAvg} size="h-3.5 w-3.5" /><span>({p.ratingCount})</span></>}

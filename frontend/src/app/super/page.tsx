@@ -76,7 +76,7 @@ export default function SuperDashboard() {
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-700"><Banknote className="h-5 w-5" /></span>
         <div className="flex-1"><div className="text-sm text-slate-500">Tổng phí dịch vụ đã thu</div><div className="text-xl font-bold">{money(d.revenue.total)}</div></div>
         <Link href="/super/payments" className="btn-outline">Xem phiếu thu</Link>
-        <Link href="/super/stores?new=1" className="btn-primary">+ Thêm cửa hàng</Link>
+        <Link href="/super/stores?new=1" className="btn-primary">+ Thêm đối tác</Link>
       </div>
     </div>
   );
