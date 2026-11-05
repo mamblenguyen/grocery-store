@@ -5,7 +5,7 @@ import { AdminOnly, CurrentUser } from '../common/decorators';
 import { PaginationDto } from '../common/pagination.dto';
 import { paged, paginate } from '../common/utils';
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { storeId } from '../common/tenant';
+import { scope, storeId } from '../common/tenant';
 import { PrismaService } from '../prisma/prisma.service';
 
 export class AdjustStockDto {
@@ -35,7 +35,7 @@ export class InventoryService {
     const where: Prisma.ProductVariantWhereInput = {
       ...(q.filter === 'low' && { stock: { gt: 0, lte: threshold } }),
       ...(q.filter === 'out' && { stock: { lte: 0 } }),
-      storeId: storeId(),
+      ...scope(),
       ...(q.search && {
         OR: [
           { sku: { contains: q.search } },
@@ -48,14 +48,14 @@ export class InventoryService {
       this.prisma.productVariant.findMany({
         where, skip, take,
         orderBy: [{ stock: 'asc' }, { product: { name: 'asc' } }],
-        include: { product: { select: { id: true, name: true, thumbnail: true } } },
+        include: { product: { select: { id: true, name: true, thumbnail: true, store: { select: { id: true, name: true } } } } },
       }),
       this.prisma.productVariant.count({ where }),
     ]);
     const items = rows.map((v) => ({
       id: v.id, sku: v.sku, name: v.name, stock: v.stock, lowStockThreshold: v.lowStockThreshold,
       price: v.price, costPrice: v.costPrice, isActive: v.isActive,
-      productId: v.product.id, productName: v.product.name, thumbnail: v.product.thumbnail,
+      productId: v.product.id, productName: v.product.name, thumbnail: v.product.thumbnail, store: v.product.store,
     }));
     return paged(items, total, page, limit);
   }
@@ -63,12 +63,12 @@ export class InventoryService {
   async logs(q: QueryLogsDto) {
     const { skip, take, page, limit } = paginate(q.page, q.limit);
     const where: Prisma.InventoryLogWhereInput = {
-      variant: { storeId: storeId() },
+      variant: scope(),
       ...(q.variantId && { variantId: q.variantId }),
       ...(q.reason && { reason: q.reason }),
       ...(q.search && {
         OR: [
-          { variant: { sku: { contains: q.search }, storeId: storeId() } },
+          { variant: { sku: { contains: q.search }, ...scope() } },
           { variant: { product: { name: { contains: q.search } } } },
           { note: { contains: q.search } },
           { document: { code: { contains: q.search } } },

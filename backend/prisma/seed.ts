@@ -21,17 +21,19 @@ function ean13(n: number) {
 }
 let barcodeSeq = 100001;
 
-const img = (seed: string) => `https://picsum.photos/seed/${seed}/600/600`;
+/** Ảnh minh hoạ có sẵn ở frontend/public/products (đồ hoạ Twemoji – CC-BY 4.0) */
+const img = (seed: string) => `/products/${seed}.svg`;
+const DEMO_IMAGES = ['gao-st25-ong-cua', 'mi-hao-hao', 'sua-tuoi-tiet-trung-vinamilk', 'nuoc-mam-nam-ngu', 'coca-cola', 'tao-envy-new-zealand', 'thit-ba-chi-heo', 'banh-quy-cosy-marie', 'snack-khoai-tay-lay-s', 'nuoc-giat-omo-matic'];
 
 const categories = [
-  { name: 'Rau củ & Trái cây', image: img('veg') },
-  { name: 'Thịt, cá & Hải sản', image: img('meat') },
-  { name: 'Đồ uống', image: img('drink') },
-  { name: 'Sữa & Sản phẩm từ sữa', image: img('milk') },
-  { name: 'Gạo, mì & Thực phẩm khô', image: img('rice') },
-  { name: 'Gia vị', image: img('spice') },
-  { name: 'Bánh kẹo & Snack', image: img('snack') },
-  { name: 'Hoá phẩm & Chăm sóc nhà cửa', image: img('clean') },
+  { name: 'Rau củ & Trái cây', image: img('cat-veg') },
+  { name: 'Thịt, cá & Hải sản', image: img('cat-meat') },
+  { name: 'Đồ uống', image: img('cat-drink') },
+  { name: 'Sữa & Sản phẩm từ sữa', image: img('cat-milk') },
+  { name: 'Gạo, mì & Thực phẩm khô', image: img('cat-rice') },
+  { name: 'Gia vị', image: img('cat-spice') },
+  { name: 'Bánh kẹo & Snack', image: img('cat-snack') },
+  { name: 'Hoá phẩm & Chăm sóc nhà cửa', image: img('cat-clean') },
 ];
 
 const products: Seed[] = [
@@ -188,6 +190,30 @@ const monthsFromNow = (m: number) => { const d = new Date(); d.setMonth(d.getMon
  * DB cũ (nâng cấp từ bản 1 cửa hàng) chưa có super admin → tạo tài khoản mặc định để vào /super.
  * Production: chỉ tạo khi có SEED_ADMIN_EMAIL + SEED_ADMIN_PASSWORD.
  */
+/** DB cũ dùng ảnh ngẫu nhiên picsum (không đúng mặt hàng) → đổi sang ảnh minh hoạ */
+async function fixDemoImages() {
+  const re = /^https:\/\/picsum\.photos\/seed\/([a-z0-9-]+)\/600\/600$/;
+  const map = (u: string | null) => {
+    const m = u?.match(re);
+    if (!m) return u;
+    const seed = m[1];
+    if (DEMO_IMAGES.includes(seed.replace(/-2$/, ''))) return img(seed);
+    if (['veg', 'meat', 'drink', 'milk', 'rice', 'spice', 'snack', 'clean'].includes(seed)) return img(`cat-${seed}`);
+    return u;
+  };
+  let n = 0;
+  for (const p of await prisma.product.findMany({ where: { thumbnail: { startsWith: 'https://picsum.photos/seed/' } }, select: { id: true, thumbnail: true, images: true } })) {
+    const images = Array.isArray(p.images) ? (p.images as string[]).map((u) => map(u)) : p.images;
+    await prisma.product.update({ where: { id: p.id }, data: { thumbnail: map(p.thumbnail), images: images as any } });
+    n++;
+  }
+  for (const c of await prisma.category.findMany({ where: { image: { startsWith: 'https://picsum.photos/seed/' } }, select: { id: true, image: true } })) {
+    await prisma.category.update({ where: { id: c.id }, data: { image: map(c.image) } });
+    n++;
+  }
+  if (n) console.log(`🖼  Đã thay ${n} ảnh demo cũ bằng ảnh minh hoạ đúng mặt hàng`);
+}
+
 async function ensureSuperAdmin() {
   if (await prisma.user.count({ where: { role: 'SUPER_ADMIN' } })) return;
   const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
@@ -212,6 +238,7 @@ async function main() {
   if (!force && (await prisma.user.count()) > 0) {
     console.log('ℹ️  DB đã có dữ liệu → bỏ qua seed (đặt FORCE_SEED=true để seed lại từ đầu)');
     await ensureSuperAdmin();
+    await fixDemoImages();
     return;
   }
   if (force && process.env.VERCEL_ENV === 'production') throw new Error('Không cho phép FORCE_SEED trên production');

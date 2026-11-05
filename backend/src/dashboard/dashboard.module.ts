@@ -1,6 +1,6 @@
 import { Controller, Get, Injectable, Module, Query } from '@nestjs/common';
 import { AdminOnly } from '../common/decorators';
-import { storeId } from '../common/tenant';
+import { scope } from '../common/tenant';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -8,7 +8,7 @@ export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
   async overview(days = 7) {
-    const sid = storeId();
+    const sc = scope();
     const since = new Date();
     since.setHours(0, 0, 0, 0);
     since.setDate(since.getDate() - (days - 1));
@@ -17,32 +17,32 @@ export class DashboardService {
 
     const [revenue, todayRevenue, orderCount, todayOrders, customers, products, byStatus, recent, topProducts, lowStock, recentOrders] =
       await Promise.all([
-        this.prisma.order.aggregate({ where: { storeId: sid, status: 'COMPLETED' }, _sum: { total: true } }),
-        this.prisma.order.aggregate({ where: { storeId: sid, status: { not: 'CANCELLED' }, createdAt: { gte: startOfToday } }, _sum: { total: true } }),
-        this.prisma.order.count({ where: { storeId: sid } }),
-        this.prisma.order.count({ where: { storeId: sid, createdAt: { gte: startOfToday } } }),
+        this.prisma.order.aggregate({ where: { ...sc, status: 'COMPLETED' }, _sum: { total: true } }),
+        this.prisma.order.aggregate({ where: { ...sc, status: { not: 'CANCELLED' }, createdAt: { gte: startOfToday } }, _sum: { total: true } }),
+        this.prisma.order.count({ where: { ...sc } }),
+        this.prisma.order.count({ where: { ...sc, createdAt: { gte: startOfToday } } }),
         // khách hàng của cửa hàng = khách đã từng đặt đơn tại cửa hàng
-        this.prisma.order.groupBy({ by: ['userId'], where: { storeId: sid, userId: { not: null } } }).then((r) => r.length),
-        this.prisma.product.count({ where: { storeId: sid, isActive: true } }),
-        this.prisma.order.groupBy({ by: ['status'], where: { storeId: sid }, _count: { _all: true } }),
+        this.prisma.order.groupBy({ by: ['userId'], where: { ...sc, userId: { not: null } } }).then((r) => r.length),
+        this.prisma.product.count({ where: { ...sc, isActive: true } }),
+        this.prisma.order.groupBy({ by: ['status'], where: { ...sc }, _count: { _all: true } }),
         this.prisma.order.findMany({
-          where: { storeId: sid, createdAt: { gte: since } },
+          where: { ...sc, createdAt: { gte: since } },
           select: { total: true, status: true, createdAt: true },
         }),
         this.prisma.orderItem.groupBy({
           by: ['productId', 'productName'],
-          where: { order: { storeId: sid, status: { not: 'CANCELLED' } } },
+          where: { order: { ...sc, status: { not: 'CANCELLED' } } },
           _sum: { quantity: true, total: true },
           orderBy: { _sum: { quantity: 'desc' } },
           take: 5,
         }),
         this.prisma.productVariant.findMany({
-          where: { storeId: sid, isActive: true, stock: { lte: this.prisma.productVariant.fields.lowStockThreshold } },
+          where: { ...sc, isActive: true, stock: { lte: this.prisma.productVariant.fields.lowStockThreshold } },
           orderBy: { stock: 'asc' },
           take: 10,
           select: { id: true, sku: true, name: true, stock: true, lowStockThreshold: true, product: { select: { name: true } } },
         }),
-        this.prisma.order.findMany({ where: { storeId: sid }, orderBy: { createdAt: 'desc' }, take: 8 }),
+        this.prisma.order.findMany({ where: { ...sc }, orderBy: { createdAt: 'desc' }, take: 8, include: { store: { select: { id: true, name: true } } } }),
       ]);
 
     // Gom doanh thu theo ngày (giờ địa phương của server), lấp đủ các ngày không có đơn

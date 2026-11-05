@@ -11,7 +11,7 @@ import { Spinner } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 import { useToast } from '@/components/Toast';
 import { SettingsProvider, useSettings } from '@/context/settings';
-import { actingStore, setApiStore } from '@/lib/api';
+import { actingStore, ALL_STORES, api, setApiStore } from '@/lib/api';
 import { storeUrl } from '@/lib/platform';
 import { ROLES } from '@/lib/format';
 
@@ -50,8 +50,10 @@ function Banners() {
     return (
       <div className="no-print flex flex-wrap items-center gap-x-3 gap-y-1 bg-violet-700 px-4 py-2 text-sm text-white sm:px-6">
         <ShieldCheck className="h-4 w-4 shrink-0" />
-        <span className="flex-1">Bạn đang <b>quản trị hộ</b> cửa hàng <b>{acting.name}</b> với quyền quản trị nền tảng.</span>
-        <button className="rounded-lg bg-white/15 px-3 py-1 font-semibold hover:bg-white/25" onClick={() => { actingStore.clear(); window.location.assign(`/super/stores/${acting.id}`); }}>Thoát về trang nền tảng</button>
+        <span className="flex-1">{acting.id === 'all'
+          ? <>Super Admin đang xem dữ liệu của <b>tất cả đối tác</b>. Chọn một đối tác ở bộ lọc để bán hàng, nhập kho, sửa sản phẩm…</>
+          : <>Bạn đang <b>quản trị hộ</b> cửa hàng <b>{acting.name}</b> với quyền quản trị nền tảng.</>}</span>
+        <button className="rounded-lg bg-white/15 px-3 py-1 font-semibold hover:bg-white/25" onClick={() => { actingStore.clear(); window.location.assign(acting.id === 'all' ? '/super' : `/super/stores/${acting.id}`); }}>Về trang nền tảng</button>
       </div>
     );
   if (!st || st.daysLeft == null || st.daysLeft > 7) return null;
@@ -70,18 +72,66 @@ function Banners() {
   );
 }
 
+/** Trang cần một cửa hàng cụ thể (bán hàng, tạo/sửa, cài đặt…) */
+const NEED_STORE = [/^\/admin\/pos/, /^\/admin\/products\/(new|\d+)/, /^\/admin\/categories/, /^\/admin\/coupons/, /^\/admin\/stock\/new/, /^\/admin\/suppliers/, /^\/admin\/labels/, /^\/admin\/staff/, /^\/admin\/settings/, /^\/admin\/subscription/];
+
+interface StoreOpt { id: number; slug: string; name: string; status: string }
+function useStoreOptions() {
+  const [list, setList] = useState<StoreOpt[]>([]);
+  useEffect(() => { api<{ items: StoreOpt[] }>('/super/stores?limit=100').then((r) => setList(r.items)).catch(() => {}); }, []);
+  return list;
+}
+
+/** Bộ lọc đối tác trên header (chỉ super admin) */
+function StoreFilter() {
+  const { acting, setActing } = useAuth();
+  const list = useStoreOptions();
+  return (
+    <label className="flex min-w-0 items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 py-1 pr-1 pl-3 text-sm">
+      <span className="hidden font-medium whitespace-nowrap text-violet-700 md:inline">Đối tác:</span>
+      <select aria-label="Lọc theo đối tác" className="max-w-[46vw] min-w-0 truncate rounded-lg border-0 bg-white py-1.5 pr-7 pl-2 text-sm font-semibold text-ink outline-none sm:max-w-[240px]"
+        value={String(acting?.id ?? 'all')}
+        onChange={(e) => { const v = e.target.value; const s = list.find((x) => String(x.id) === v); setActing(s ? { id: s.id, slug: s.slug, name: s.name } : ALL_STORES); }}>
+        <option value="all">🌐 Tất cả đối tác</option>
+        {list.map((s) => <option key={s.id} value={s.id}>{s.name}{s.status !== 'ACTIVE' ? ' (tạm ngưng)' : ''}</option>)}
+      </select>
+    </label>
+  );
+}
+
+/** Chế độ "tất cả đối tác" ở trang cần chọn 1 cửa hàng */
+function NeedStore() {
+  const { setActing } = useAuth();
+  const list = useStoreOptions();
+  return (
+    <div className="card mx-auto max-w-lg space-y-4 text-center">
+      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50 text-violet-700"><Store className="h-7 w-7" /></span>
+      <h2 className="text-lg font-bold">Chọn một đối tác để dùng chức năng này</h2>
+      <p className="text-sm text-slate-500">Bán hàng, tạo/sửa sản phẩm, danh mục, mã giảm giá, nhập kho, nhân viên, cài đặt… luôn thực hiện cho một cửa hàng cụ thể.</p>
+      <div className="grid gap-2 text-left">
+        {list.map((s) => (
+          <button key={s.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold hover:border-violet-300 hover:bg-violet-50" onClick={() => setActing({ id: s.id, slug: s.slug, name: s.name })}>
+            {s.name}<span className="text-xs font-normal text-slate-400">/s/{s.slug}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   setApiStore(null);
-  const { user, loading, isStaff } = useAuth();
+  const { user, loading, isStaff, acting, setActing } = useAuth();
   const router = useRouter();
   const toast = useToast();
 
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace('/login?next=/admin');
-    else if (user.role === 'SUPER_ADMIN' && !isStaff) router.replace('/super');
+    // Super admin vào /admin → mặc định xem dữ liệu của tất cả đối tác
+    else if (user.role === 'SUPER_ADMIN' && !acting) setActing(ALL_STORES);
     else if (!isStaff) router.replace('/');
-  }, [loading, user, isStaff, router]);
+  }, [loading, user, isStaff, acting, setActing, router]);
   // API trả 402 khi gói hết hạn → báo rõ cho người dùng
   useEffect(() => {
     const h = (e: Event) => toast((e as CustomEvent).detail, 'error');
@@ -89,7 +139,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => window.removeEventListener('plan-expired', h);
   }, [toast]);
   if (loading || !isStaff) return <Spinner className="py-40" />;
-  return <SettingsProvider admin><AdminShell>{children}</AdminShell></SettingsProvider>;
+  // key: đổi đối tác ở bộ lọc → tải lại toàn bộ dữ liệu trang
+  return <SettingsProvider key={String(acting?.id ?? '')} admin={acting?.id !== 'all'}><AdminShell>{children}</AdminShell></SettingsProvider>;
 }
 
 function AdminShell({ children }: { children: React.ReactNode }) {
@@ -100,7 +151,8 @@ function AdminShell({ children }: { children: React.ReactNode }) {
   const [mobile, setMobile] = useState(false);
   useEffect(() => setMobile(false), [pathname]);
   const isOwner = user?.role === 'ADMIN' || !!acting;
-  const storeSlug = acting?.slug ?? user?.store?.slug;
+  const allMode = acting?.id === 'all';
+  const storeSlug = acting?.slug || user?.store?.slug;
 
   const all = GROUPS.flatMap((g) => g.items);
   const current = [...all].sort((a, b) => b.href.length - a.href.length).find((m) => (m.href === '/admin' ? pathname === '/admin' : pathname.startsWith(m.href)));
@@ -109,7 +161,7 @@ function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-full flex-col bg-ink text-slate-300">
       <Link href="/admin" className="flex items-center gap-3 px-5 py-5">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white"><Warehouse className="h-5 w-5" /></span>
-        <span className="leading-tight"><span className="block font-bold text-white">{settings.storeName}</span><span className="text-xs text-slate-400">Quản trị cửa hàng</span></span>
+        <span className="leading-tight"><span className="block font-bold text-white">{allMode ? 'Tất cả đối tác' : settings.storeName}</span><span className="text-xs text-slate-400">Quản trị cửa hàng</span></span>
       </Link>
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
         {GROUPS.map((g) => {
@@ -154,14 +206,15 @@ function AdminShell({ children }: { children: React.ReactNode }) {
         <Banners />
         <header className="no-print sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur sm:px-6">
           <button className="btn-icon btn-ghost -ml-2 lg:hidden" onClick={() => setMobile(true)}>{mobile ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
-          <h1 className="text-base font-bold text-ink">{current?.label ?? 'Quản trị'}</h1>
+          <h1 className="hidden text-base font-bold text-ink sm:block">{current?.label ?? 'Quản trị'}</h1>
+          {user?.role === 'SUPER_ADMIN' && <StoreFilter />}
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <NotificationBell allHref="/account/notifications" dark />
-            <Link href="/admin/pos" className="btn-primary btn-sm hidden sm:inline-flex"><Store className="h-4 w-4" /> Bán hàng</Link>
-            <Link href={storeSlug ? storeUrl(storeSlug) : '/'} target="_blank" className="btn-outline btn-sm"><ExternalLink className="h-4 w-4" /><span className="hidden sm:inline">Xem cửa hàng</span></Link>
+            <Link href="/admin/pos" className={`btn-primary btn-sm hidden ${allMode ? '' : 'sm:inline-flex'}`}><Store className="h-4 w-4" /> Bán hàng</Link>
+            {!allMode && <Link href={storeSlug ? storeUrl(storeSlug) : '/'} target="_blank" className="btn-outline btn-sm"><ExternalLink className="h-4 w-4" /><span className="hidden sm:inline">Xem cửa hàng</span></Link>}
           </div>
         </header>
-        <main className="p-4 sm:p-6">{children}</main>
+        <main className="p-4 sm:p-6">{allMode && NEED_STORE.some((r) => r.test(pathname)) ? <NeedStore /> : children}</main>
       </div>
     </div>
   );

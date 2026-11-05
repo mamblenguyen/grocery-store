@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { paged, paginate, slugify } from '../common/utils';
 import { assertPlanLimit } from '../common/plan-limits';
-import { storeId } from '../common/tenant';
+import { scope, storeId } from '../common/tenant';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueryProductsDto, SaveProductDto } from './dto/product.dto';
 
@@ -52,7 +52,7 @@ export class ProductsService {
   }
 
   private async buildWhere(q: QueryProductsDto, admin: boolean): Promise<Prisma.ProductWhereInput> {
-    const where: Prisma.ProductWhereInput = { storeId: storeId() };
+    const where: Prisma.ProductWhereInput = { ...scope() };
     if (!admin) where.isActive = true;
     else if (q.status === 'active') where.isActive = true;
     else if (q.status === 'inactive') where.isActive = false;
@@ -65,10 +65,12 @@ export class ProductsService {
       ];
     }
     if (q.category || q.categoryId) {
-      const cat = q.categoryId
-        ? await this.prisma.category.findFirst({ where: { id: q.categoryId, storeId: storeId() }, include: { children: true } })
-        : await this.prisma.category.findUnique({ where: { storeId_slug: { storeId: storeId(), slug: q.category! } }, include: { children: true } });
-      where.categoryId = { in: cat ? [cat.id, ...cat.children.map((c) => c.id)] : [-1] };
+      // Chế độ "tất cả đối tác": lọc danh mục theo slug trên mọi cửa hàng
+      const cats = q.categoryId
+        ? await this.prisma.category.findMany({ where: { id: q.categoryId, ...scope() }, include: { children: true } })
+        : await this.prisma.category.findMany({ where: { slug: q.category!, ...scope() }, include: { children: true } });
+      const ids = cats.flatMap((c) => [c.id, ...c.children.map((x) => x.id)]);
+      where.categoryId = { in: ids.length ? ids : [-1] };
     }
     if (q.brand) where.brand = { equals: q.brand };
     if (q.minPrice !== undefined || q.maxPrice !== undefined) {
@@ -97,6 +99,7 @@ export class ProductsService {
         where, skip, take, orderBy: this.orderBy(q.sort),
         include: {
           ...listInclude,
+          ...(admin && { store: { select: { id: true, name: true, slug: true } } }),
           variants: admin ? listInclude.variants : { ...listInclude.variants, where: { isActive: true } },
         },
       }),
@@ -131,7 +134,7 @@ export class ProductsService {
   }
 
   async findById(id: number) {
-    const p = await this.prisma.product.findFirst({ where: { id, storeId: storeId() }, include: detailInclude });
+    const p = await this.prisma.product.findFirst({ where: { id, ...scope() }, include: { ...detailInclude, store: { select: { id: true, name: true, slug: true } } } });
     if (!p) throw new NotFoundException('Không tìm thấy sản phẩm');
     return this.format(p);
   }
@@ -229,12 +232,12 @@ export class ProductsService {
   }
 
   async toggle(id: number, field: 'isActive' | 'isFeatured') {
-    const p = await this.prisma.product.findFirstOrThrow({ where: { id, storeId: storeId() } });
+    const p = await this.prisma.product.findFirstOrThrow({ where: { id, ...scope() } });
     return this.prisma.product.update({ where: { id }, data: { [field]: !p[field] } });
   }
 
   async remove(id: number) {
-    await this.prisma.product.findFirstOrThrow({ where: { id, storeId: storeId() } });
+    await this.prisma.product.findFirstOrThrow({ where: { id, ...scope() } });
     return this.prisma.product.delete({ where: { id } });
   }
 }

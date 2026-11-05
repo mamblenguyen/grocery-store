@@ -112,6 +112,7 @@ export interface StockDocItem {
 }
 
 export interface StockDoc {
+  store?: { id: number; name: string };
   id: number; code: string; type: 'IMPORT' | 'EXPORT' | 'STOCKTAKE'; status: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
   supplier?: Supplier | null; supplierId?: number | null; reason?: string | null; invoiceNo?: string | null; note?: string | null;
   totalQuantity: number; totalAmount: number; createdAt: string; completedAt?: string | null; cancelledAt?: string | null;

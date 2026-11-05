@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
-import { isExpired, storeId, tenant } from '../common/tenant';
+import { isAllStores, isExpired, scope, storeId, tenant } from '../common/tenant';
 import { paged, paginate } from '../common/utils';
 import { CouponsService } from '../coupons/coupons.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -226,20 +226,20 @@ export class OrdersService {
 
   /** Cửa hàng: chỉ đơn của cửa hàng hiện tại */
   listAll(q: QueryOrdersDto) {
-    return this.listWhere(q, { storeId: storeId() });
+    return this.listWhere(q, scope());
   }
 
   /** Xuất CSV (UTF-8 BOM để Excel đọc đúng tiếng Việt) */
   async exportCsv(q: QueryOrdersDto) {
     const rows = await this.prisma.order.findMany({
-      where: this.buildWhere(q, { storeId: storeId() }), orderBy: { createdAt: 'desc' }, take: 10000,
-      include: { items: true },
+      where: this.buildWhere(q, scope()), orderBy: { createdAt: 'desc' }, take: 10000,
+      include: { items: true, store: { select: { name: true } } },
     });
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const header = ['Mã đơn', 'Ngày', 'Kênh', 'Khách hàng', 'SĐT', 'Địa chỉ', 'Sản phẩm', 'Tạm tính', 'Giảm giá', 'Phí ship', 'Tổng', 'Thanh toán', 'TT thanh toán', 'Trạng thái'];
+    const header = ['Mã đơn', 'Cửa hàng', 'Ngày', 'Kênh', 'Khách hàng', 'SĐT', 'Địa chỉ', 'Sản phẩm', 'Tạm tính', 'Giảm giá', 'Phí ship', 'Tổng', 'Thanh toán', 'TT thanh toán', 'Trạng thái'];
     const lines = rows.map((o) =>
       [
-        o.code, o.createdAt.toLocaleString('vi-VN'), o.channel, o.customerName, o.phone, o.address,
+        o.code, o.store.name, o.createdAt.toLocaleString('vi-VN'), o.channel, o.customerName, o.phone, o.address,
         o.items.map((i) => `${i.productName} (${i.variantName}) x${i.quantity}`).join('; '),
         o.subtotal, o.discount, o.shippingFee, o.total, o.paymentMethod, o.paymentStatus, o.status,
       ].map(esc).join(','),
@@ -251,7 +251,7 @@ export class OrdersService {
   async findOne(id: number, userId?: number) {
     const order = await this.prisma.order.findUnique({ where: { id }, include: orderInclude });
     if (!order) throw new NotFoundException('Không tìm thấy đơn hàng');
-    if (userId !== undefined ? order.userId !== userId : order.storeId !== storeId()) throw new NotFoundException('Không tìm thấy đơn hàng');
+    if (userId !== undefined ? order.userId !== userId : !isAllStores() && order.storeId !== storeId()) throw new NotFoundException('Không tìm thấy đơn hàng');
     return order;
   }
 
@@ -259,7 +259,7 @@ export class OrdersService {
   async updateStatus(id: number, status: OrderStatus, actorId: number, cancelReason?: string, checkStore = true) {
     const updated = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUniqueOrThrow({ where: { id }, include: { items: true } });
-      if (checkStore && order.storeId !== storeId()) throw new NotFoundException('Không tìm thấy đơn hàng');
+      if (checkStore && !isAllStores() && order.storeId !== storeId()) throw new NotFoundException('Không tìm thấy đơn hàng');
       if (!TRANSITIONS[order.status].includes(status))
         throw new BadRequestException(`Không thể chuyển trạng thái từ ${order.status} sang ${status}`);
 
@@ -315,7 +315,7 @@ export class OrdersService {
   }
 
   async updatePayment(id: number, paymentStatus: PaymentStatus) {
-    const order = await this.prisma.order.findFirstOrThrow({ where: { id, storeId: storeId() } });
+    const order = await this.prisma.order.findFirstOrThrow({ where: { id, ...scope() } });
     const updated = await this.prisma.$transaction(async (tx) => {
       if (paymentStatus === 'PAID' && order.paymentStatus !== 'PAID')
         await tx.paymentTransaction.create({

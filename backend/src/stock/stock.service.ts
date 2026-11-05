@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, StockDocType } from '@prisma/client';
-import { storeId } from '../common/tenant';
+import { scope, storeId } from '../common/tenant';
 import { paged, paginate } from '../common/utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueryStockDocsDto, SaveStockDocDto, SupplierDto } from './stock.dto';
@@ -73,7 +73,7 @@ export class StockService {
   async expiring(days = 30) {
     const until = new Date(Date.now() + days * 86400000);
     const items = await this.prisma.stockDocumentItem.findMany({
-      where: { expiryDate: { not: null, lte: until }, document: { storeId: storeId(), type: 'IMPORT', status: 'COMPLETED' }, variant: { stock: { gt: 0 } } },
+      where: { expiryDate: { not: null, lte: until }, document: { ...scope(), type: 'IMPORT', status: 'COMPLETED' }, variant: { stock: { gt: 0 } } },
       orderBy: { expiryDate: 'asc' },
       take: 200,
       include: {
@@ -95,9 +95,9 @@ export class StockService {
   async summary() {
     const threshold = this.prisma.productVariant.fields.lowStockThreshold;
     const [variants, low, out] = await Promise.all([
-      this.prisma.productVariant.findMany({ where: { storeId: storeId() }, select: { stock: true, costPrice: true, price: true } }),
-      this.prisma.productVariant.count({ where: { storeId: storeId(), isActive: true, stock: { gt: 0, lte: threshold } } }),
-      this.prisma.productVariant.count({ where: { storeId: storeId(), isActive: true, stock: { lte: 0 } } }),
+      this.prisma.productVariant.findMany({ where: { ...scope() }, select: { stock: true, costPrice: true, price: true } }),
+      this.prisma.productVariant.count({ where: { ...scope(), isActive: true, stock: { gt: 0, lte: threshold } } }),
+      this.prisma.productVariant.count({ where: { ...scope(), isActive: true, stock: { lte: 0 } } }),
     ]);
     return {
       skus: variants.length,
@@ -135,7 +135,7 @@ export class StockService {
   async list(q: QueryStockDocsDto) {
     const { skip, take, page, limit } = paginate(q.page, q.limit);
     const where: Prisma.StockDocumentWhereInput = {
-      storeId: storeId(),
+      ...scope(),
       ...(q.type && { type: q.type }),
       ...(q.status && { status: q.status }),
       ...(q.supplierId && { supplierId: q.supplierId }),
@@ -149,7 +149,7 @@ export class StockService {
     const [items, total] = await Promise.all([
       this.prisma.stockDocument.findMany({
         where, skip, take, orderBy: { createdAt: 'desc' },
-        include: { supplier: { select: { id: true, name: true } }, createdBy: { select: { fullName: true } }, _count: { select: { items: true } } },
+        include: { supplier: { select: { id: true, name: true } }, createdBy: { select: { fullName: true } }, store: { select: { id: true, name: true } }, _count: { select: { items: true } } },
       }),
       this.prisma.stockDocument.count({ where }),
     ]);
@@ -157,7 +157,7 @@ export class StockService {
   }
 
   async findOne(id: number) {
-    const doc = await this.prisma.stockDocument.findFirst({ where: { id, storeId: storeId() }, include: docInclude });
+    const doc = await this.prisma.stockDocument.findFirst({ where: { id, ...scope() }, include: docInclude });
     if (!doc) throw new NotFoundException('Không tìm thấy phiếu kho');
     return doc;
   }

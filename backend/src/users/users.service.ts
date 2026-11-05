@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { assertPlanLimit } from '../common/plan-limits';
-import { storeId } from '../common/tenant';
+import { scope, storeId } from '../common/tenant';
 import { paged, paginate } from '../common/utils';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -69,12 +69,12 @@ export class UsersService {
 
   // ───────────── Khách hàng của cửa hàng (đã từng đặt đơn) ─────────────
   async listCustomers(q: { page?: number; limit?: number; search?: string }) {
-    const sid = storeId();
+    const sc = scope();
     const { skip, take, page, limit } = paginate(q.page, q.limit);
     const groups = await this.prisma.order.groupBy({
-      by: ['userId'], where: { storeId: sid, userId: { not: null } }, _count: { _all: true }, _max: { createdAt: true },
+      by: ['userId'], where: { ...sc, userId: { not: null } }, _count: { _all: true }, _max: { createdAt: true },
     });
-    const spent = await this.prisma.order.groupBy({ by: ['userId'], where: { storeId: sid, userId: { not: null }, status: 'COMPLETED' }, _sum: { total: true } });
+    const spent = await this.prisma.order.groupBy({ by: ['userId'], where: { ...sc, userId: { not: null }, status: 'COMPLETED' }, _sum: { total: true } });
     const spentMap = new Map(spent.map((s) => [s.userId, s._sum.total ?? 0]));
     const users = await this.prisma.user.findMany({
       where: {
@@ -90,8 +90,8 @@ export class UsersService {
   }
 
   async customerDetail(id: number) {
-    const sid = storeId();
-    const orders = await this.prisma.order.findMany({ where: { userId: id, storeId: sid }, orderBy: { createdAt: 'desc' }, take: 50 });
+    const sc = scope();
+    const orders = await this.prisma.order.findMany({ where: { userId: id, ...sc }, orderBy: { createdAt: 'desc' }, take: 50 });
     if (!orders.length) throw new NotFoundException('Khách hàng chưa mua tại cửa hàng');
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id }, select: { id: true, email: true, fullName: true, phone: true, createdAt: true } });
     const totalSpent = orders.filter((o) => o.status === 'COMPLETED').reduce((s, o) => s + o.total, 0);

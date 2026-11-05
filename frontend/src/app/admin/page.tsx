@@ -1,5 +1,6 @@
 'use client';
 import { AlertTriangle, ArrowRight, DollarSign, Package, ReceiptText, ShoppingBag, TrendingUp, Users } from 'lucide-react';
+import { StoreTag } from '@/components/admin/AllStores';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Spinner, StatCard, StatusBadge } from '@/components/ui';
@@ -75,7 +76,7 @@ export default function AdminDashboard() {
               <tbody>
                 {d.recentOrders.map((o) => (
                   <tr key={o.id}>
-                    <td><Link href={`/admin/orders/${o.id}`} className="font-semibold text-brand-700">{o.code}</Link></td>
+                    <td><Link href={`/admin/orders/${o.id}`} className="font-semibold text-brand-700">{o.code}</Link><StoreTag s={o.store} /></td>
                     <td>{o.customerName}</td>
                     <td><span className={`badge ${o.channel === 'POS' ? 'bg-violet-100 text-violet-800' : 'bg-sky-100 text-sky-800'}`}>{o.channel === 'POS' ? 'Tại quầy' : 'Online'}</span></td>
                     <td className="text-right font-semibold">{money(o.total)}</td>

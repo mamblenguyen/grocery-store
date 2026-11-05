@@ -40,7 +40,9 @@ let currentStore: string | null = null;
 export const setApiStore = (slug: string | null) => { currentStore = slug; };
 export const getApiStore = () => currentStore;
 
-export interface ActingStore { id: number; slug: string; name: string }
+/** id = 'all': super admin xem dữ liệu của tất cả đối tác */
+export interface ActingStore { id: number | 'all'; slug: string; name: string }
+export const ALL_STORES: ActingStore = { id: 'all', slug: '', name: 'Tất cả đối tác' };
 /** Super admin đang quản trị hộ cửa hàng nào (header X-Store-Id cho /admin/*) */
 export const actingStore = {
   get: (): ActingStore | null => {
@@ -91,7 +93,7 @@ export function qs(params: Record<string, unknown>) {
 }
 
 export function imageUrl(src?: string | null) {
-  if (!src) return 'https://placehold.co/600x600?text=No+Image';
+  if (!src) return '/products/placeholder.svg';
   return src.startsWith('/uploads') ? `${ASSET_BASE}${src}` : src;
 }
 

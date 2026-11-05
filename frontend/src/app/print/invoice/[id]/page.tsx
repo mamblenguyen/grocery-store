@@ -154,7 +154,8 @@ function K80({ o, s, qr }: { o: Order; s: StoreSettings; qr: string }) {
 function Inner() {
   const { id } = useParams<{ id: string }>();
   const k80 = useSearchParams().get('format') === 'k80';
-  const { user, loading, isStaff } = useAuth();
+  const { user, loading, isStaff, acting } = useAuth();
+  const allMode = acting?.id === 'all';
   const ctx = useSettings();
   const [own, setOwn] = useState<StoreSettings | null>(null);
   const [o, setO] = useState<Order | null>(null);
@@ -167,14 +168,14 @@ function Inner() {
     api<Order>(isStaff ? `/admin/orders/${id}` : `/orders/my/${id}`).then(async (order) => {
       setO(order);
       // Khách in hoá đơn: lấy thông tin của cửa hàng đã bán đơn này
-      if (!isStaff && order.store) setOwn(await api<StoreSettings>('/settings', { headers: { 'X-Store': order.store.slug } }));
+      if ((!isStaff || allMode) && order.store) setOwn(await api<StoreSettings>('/settings', { headers: { 'X-Store': order.store.slug } }));
       setQr(await QRCode.toDataURL(order.code, { margin: 0, width: 200 }));
     }).catch((e) => setError(e.message));
-  }, [id, user, loading, isStaff]);
+  }, [id, user, loading, isStaff, allMode]);
 
   if (error) return <div className="p-10 text-center">{error}</div>;
-  const settings = isStaff ? ctx.settings : own;
-  if (!o || !settings || (isStaff && !ctx.loaded)) return <Spinner />;
+  const settings = isStaff && !allMode ? ctx.settings : own;
+  if (!o || !settings || (isStaff && !allMode && !ctx.loaded)) return <Spinner />;
   return (
     <PrintShell ready={!!qr} width={k80 ? '80mm' : '210mm'} page={k80 ? 'size: 80mm auto; margin: 0;' : 'size: A4; margin: 0;'}>
       {k80 ? <K80 o={o} s={settings} qr={qr} /> : <A4 o={o} s={settings} qr={qr} />}

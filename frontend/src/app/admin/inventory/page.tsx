@@ -1,5 +1,6 @@
 'use client';
 import { AlertTriangle, ArrowDownToLine, Boxes, ClipboardCheck, PackageX, SlidersHorizontal, Wallet } from 'lucide-react';
+import { StoreTag } from '@/components/admin/AllStores';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
@@ -10,7 +11,7 @@ import { api, imageUrl, qs } from '@/lib/api';
 import { dateTime, INVENTORY_REASONS, money, num } from '@/lib/format';
 import type { Paged } from '@/lib/types';
 
-interface StockRow { id: number; sku: string; name: string; stock: number; lowStockThreshold: number; price: number; costPrice: number | null; productName: string; thumbnail: string | null; isActive: boolean }
+interface StockRow { id: number; sku: string; name: string; stock: number; lowStockThreshold: number; price: number; costPrice: number | null; productName: string; thumbnail: string | null; isActive: boolean; store?: { id: number; name: string } }
 interface Log { id: number; change: number; stockAfter: number; unitCost: number | null; reason: string; note: string | null; createdAt: string; variant: { sku: string; name: string; product: { name: string } }; user: { fullName: string } | null; document: { id: number; code: string } | null }
 interface Expiring { id: number; lotNo: string | null; expiryDate: string; quantity: number; daysLeft: number; document: { id: number; code: string }; variant: { id: number; sku: string; name: string; stock: number; product: { name: string; thumbnail: string | null; unit: string | null } } }
 interface Summary { skus: number; units: number; costValue: number; retailValue: number; lowStock: number; outOfStock: number }
@@ -119,7 +120,7 @@ function InventoryInner() {
                         <td><div className="flex items-center gap-3">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={imageUrl(v.thumbnail)} alt="" className="h-10 w-10 rounded-lg object-cover" />
-                          <div><div className="font-semibold text-ink">{v.productName}</div><div className="text-xs text-slate-400">{v.name}</div></div>
+                          <div><div className="font-semibold text-ink">{v.productName}</div><div className="text-xs text-slate-400">{v.name}</div><StoreTag s={v.store} /></div>
                         </div></td>
                         <td className="font-mono text-xs">{v.sku}</td>
                         <td className="text-right">{v.costPrice != null ? money(v.costPrice) : '—'}</td>

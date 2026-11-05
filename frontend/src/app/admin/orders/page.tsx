@@ -1,5 +1,6 @@
 'use client';
 import { FileDown } from 'lucide-react';
+import { StoreTag } from '@/components/admin/AllStores';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
@@ -51,7 +52,7 @@ function OrdersInner() {
             <tbody>
               {data.items.map((o) => (
                 <tr key={o.id} className="cursor-pointer" onClick={() => router.push(`/admin/orders/${o.id}`)}>
-                  <td><Link href={`/admin/orders/${o.id}`} className="font-semibold text-brand-700">{o.code}</Link></td>
+                  <td><Link href={`/admin/orders/${o.id}`} className="font-semibold text-brand-700">{o.code}</Link><StoreTag s={o.store} /></td>
                   <td>{o.customerName}<div className="text-xs text-slate-400">{o.phone}</div></td>
                   <td><span className={`badge ${o.channel === 'POS' ? 'bg-violet-100 text-violet-800' : 'bg-sky-100 text-sky-800'}`}>{o.channel === 'POS' ? 'Tại quầy' : 'Online'}</span></td>
                   <td className="text-right">{o._count?.items}</td>

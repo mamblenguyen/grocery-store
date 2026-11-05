@@ -51,7 +51,8 @@ export function ProductCard({ p, width }: { p: Product; width: number }) {
     <Pressable testID={`product-${p.slug}`} onPress={open} style={({ pressed }) => [st.card, shadow, { width }, pressed && { opacity: 0.92 }]}>
       <View>
         <Image source={{ uri: imageUrl(p.thumbnail) }} style={{ width: '100%', aspectRatio: 1, backgroundColor: C.line2 }} contentFit="cover" transition={150} />
-        {discount > 0 && <View style={st.sale}><Text style={st.saleT}>-{discount}%</Text></View>}
+        {discount > 0 && <View style={st.sale}><Text style={st.saleT}>-{discount}%</Text><Text style={st.saleS}>GIẢM</Text></View>}
+        {p.isFeatured && <View style={st.feat}><Text style={{ fontSize: 10, fontWeight: '800', color: '#451a03' }}>★ Nổi bật</Text></View>}
         <Pressable hitSlop={8} onPress={() => wl.toggle(p.id)} style={st.heart} accessibilityLabel="Yêu thích">
           <Ionicons name={wl.has(p.id) ? 'heart' : 'heart-outline'} size={18} color={wl.has(p.id) ? C.red : C.muted} />
         </Pressable>
@@ -68,12 +69,12 @@ export function ProductCard({ p, width }: { p: Product; width: number }) {
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 6 }}>
           <View style={{ flex: 1 }}>
-            <Price value={p.minPrice} size={15} />
+            <Price value={p.minPrice} size={16} style={discount > 0 ? { color: '#e11d48' } : undefined} />
             {discount > 0 && best?.compareAtPrice ? <Text style={st.strike}>{best.compareAtPrice.toLocaleString('vi-VN')}₫</Text> : <Text style={st.meta}>{active.length > 1 ? `${active.length} phân loại` : p.unit ? `/ ${p.unit}` : ' '}</Text>}
           </View>
           {!out && (
             <Pressable testID={`quick-add-${p.slug}`} onPress={quickAdd} hitSlop={6} style={st.add} accessibilityLabel="Thêm vào giỏ">
-              <Ionicons name={single ? 'add' : 'cart-outline'} size={20} color={C.brand700} />
+              <Ionicons name={single ? 'add' : 'cart-outline'} size={single ? 22 : 18} color="#fff" />
             </Pressable>
           )}
         </View>
@@ -83,15 +84,17 @@ export function ProductCard({ p, width }: { p: Product; width: number }) {
 }
 
 const st = StyleSheet.create({
-  card: { backgroundColor: C.white, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: '#eef2f6' },
-  sale: { position: 'absolute', top: 8, left: 8, backgroundColor: C.red, borderRadius: R.full, paddingHorizontal: 8, paddingVertical: 2 },
-  saleT: { color: C.white, fontWeight: '800', fontSize: 11 },
+  card: { backgroundColor: C.white, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: '#e8edf3' },
+  sale: { position: 'absolute', top: 0, left: 10, backgroundColor: '#e11d48', borderBottomLeftRadius: 8, borderBottomRightRadius: 8, paddingHorizontal: 7, paddingTop: 5, paddingBottom: 4, alignItems: 'center' },
+  saleT: { color: C.white, fontWeight: '900', fontSize: 12, lineHeight: 13 },
+  saleS: { color: C.white, fontWeight: '700', fontSize: 8, letterSpacing: 0.5 },
+  feat: { position: 'absolute', bottom: 8, left: 8, backgroundColor: '#fbbf24', borderRadius: R.full, paddingHorizontal: 7, paddingVertical: 2 },
   heart: { position: 'absolute', top: 8, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,.92)', alignItems: 'center', justifyContent: 'center' },
   out: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(255,255,255,.6)', alignItems: 'center', justifyContent: 'center' },
   outT: { backgroundColor: C.ink, color: C.white, fontWeight: '700', fontSize: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.full, overflow: 'hidden' },
   brand: { fontSize: 10, fontWeight: '700', color: C.faint, letterSpacing: 0.5 },
-  name: { fontSize: 14, fontWeight: '600', color: C.ink, minHeight: 38, lineHeight: 19 },
+  name: { fontSize: 14, fontWeight: '500', color: C.ink, minHeight: 38, lineHeight: 19 },
   meta: { fontSize: 11, color: C.faint },
   strike: { fontSize: 11, color: C.faint, textDecorationLine: 'line-through' },
-  add: { width: 34, height: 34, borderRadius: 10, backgroundColor: C.brand50, alignItems: 'center', justifyContent: 'center' },
+  add: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.brand600, alignItems: 'center', justifyContent: 'center' },
 });

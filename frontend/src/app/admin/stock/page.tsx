@@ -1,5 +1,6 @@
 'use client';
 import { ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, FileText } from 'lucide-react';
+import { StoreTag } from '@/components/admin/AllStores';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
@@ -44,7 +45,7 @@ function Inner() {
             <tbody>
               {data.items.map((d) => (
                 <tr key={d.id} className="cursor-pointer" onClick={() => router.push(`/admin/stock/${d.id}`)}>
-                  <td className="font-mono font-semibold text-brand-700">{d.code}</td>
+                  <td className="font-mono font-semibold text-brand-700">{d.code}<StoreTag s={d.store} /></td>
                   <td><Badge map={Object.fromEntries(Object.entries(STOCK_DOC_TYPE).map(([k, v]) => [k, { label: v.short, cls: v.cls }]))} value={d.type} /></td>
                   <td className="text-sm">{d.supplier?.name ?? (d.reason ? EXPORT_REASONS[d.reason] : '—')}</td>
                   <td className="text-right">{d._count.items}</td>

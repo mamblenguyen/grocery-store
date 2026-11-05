@@ -62,6 +62,8 @@ export function qs(params: Record<string, unknown>) {
 }
 
 export function imageUrl(src?: string | null) {
-  if (!src) return 'https://placehold.co/600x600/png?text=No+Image';
-  return src.startsWith('/uploads') ? `${ASSET_BASE}${src}` : src;
+  if (!src) return `${WEB_URL}/products/placeholder.svg`;
+  if (src.startsWith('/uploads')) return `${ASSET_BASE}${src}`;
+  // ảnh minh hoạ mẫu nằm ở web (frontend/public)
+  return src.startsWith('/') ? `${WEB_URL}${src}` : src;
 }

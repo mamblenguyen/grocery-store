@@ -61,7 +61,16 @@ export class AuthGuard implements CanActivate {
       }
     } else if (user.role === 'SUPER_ADMIN') {
       // Super admin quản trị hộ cửa hàng qua header X-Store-Id (không bị giới hạn bởi trạng thái / hạn gói)
-      const acting = Number(req.headers['x-store-id']);
+      const rawActing = String(req.headers['x-store-id'] ?? '');
+      if (rawActing === 'all' && (isAdminRoute || needsStoreRole)) {
+        // Xem dữ liệu của tất cả đối tác
+        t.allStores = true;
+        t.storeId = undefined;
+        t.store = undefined;
+        t.storeError = undefined;
+        return true;
+      }
+      const acting = Number(rawActing);
       if (acting && (isAdminRoute || needsStoreRole || !t.storeId)) {
         const store = await this.prisma.store.findUnique({ where: { id: acting }, select: storeSelect });
         if (!store) throw new BadRequestException('Cửa hàng không tồn tại');

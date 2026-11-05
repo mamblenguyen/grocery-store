@@ -15,6 +15,7 @@ enum Role {
   ADMIN // chủ / quản lý cửa hàng
   STAFF // nhân viên cửa hàng
   CUSTOMER // khách hàng (dùng chung toàn nền tảng)
+  SHIPPER // tài xế giao hàng của sàn
 }
 
 enum StoreStatus {
@@ -98,17 +99,19 @@ model User {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  notifications Notification[]
-  pushTokens    PushToken[]
-  orders        Order[]
-  createdOrders Order[]         @relation("OrderCreatedBy")
-  inventoryLogs InventoryLog[]
-  reviews       Review[]
-  wishlist      WishlistItem[]
-  addresses     Address[]
-  docsCreated   StockDocument[] @relation("DocCreatedBy")
-  docsCompleted StockDocument[] @relation("DocCompletedBy")
-  storePayments StorePayment[]
+  notifications  Notification[]
+  pushTokens     PushToken[]
+  orders         Order[]
+  createdOrders  Order[]         @relation("OrderCreatedBy")
+  inventoryLogs  InventoryLog[]
+  reviews        Review[]
+  wishlist       WishlistItem[]
+  addresses      Address[]
+  docsCreated    StockDocument[] @relation("DocCreatedBy")
+  docsCompleted  StockDocument[] @relation("DocCompletedBy")
+  storePayments  StorePayment[]
+  shipperProfile ShipperProfile?
+  deliveries     Delivery[]      @relation("ShipperDeliveries")
 
   @@index([storeId])
 }
@@ -257,6 +260,10 @@ model Order {
   total         Int
   couponCode    String?
   cancelReason  String?              @db.Text
+  /// Vị trí giao hàng (khách ghim trên bản đồ / GPS)
+  dropoffLat    Float?
+  dropoffLng    Float?
+  delivery      Delivery?
   items         OrderItem[]
   payments      PaymentTransaction[]
   createdAt     DateTime             @default(now())
@@ -388,6 +395,8 @@ model Address {
   fullName  String
   phone     String
   address   String   @db.Text
+  lat       Float?
+  lng       Float?
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
 
@@ -521,6 +530,9 @@ model Store {
   /// null = không thời hạn
   planExpiresAt DateTime?
   note          String?     @db.Text
+  /// Vị trí cửa hàng (điểm lấy hàng của tài xế)
+  lat           Float?
+  lng           Float?
 
   /// ── Thông tin đối tác (pháp lý, đối soát, hợp đồng) – chỉ super admin xem/sửa
   businessName        String? /// Tên doanh nghiệp / hộ kinh doanh
@@ -548,6 +560,7 @@ model Store {
   suppliers      Supplier[]
   stockDocuments StockDocument[]
   payments       StorePayment[]
+  deliveries     Delivery[]
 }
 
 /// Lịch sử gia hạn / thanh toán gói của đối tác
@@ -567,5 +580,67 @@ model StorePayment {
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
 
+  @@index([storeId])
+}
+
+enum DeliveryStatus {
+  WAITING // chờ tài xế nhận
+  ASSIGNED // tài xế đã nhận, đang đến cửa hàng
+  PICKED_UP // đã lấy hàng, đang giao
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+/// Hồ sơ tài xế giao hàng (tài xế tự do của sàn, như Grab)
+model ShipperProfile {
+  userId      Int       @id
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicleType String    @default("XE_MAY") // XE_MAY | XE_DAP | O_TO
+  plateNumber String?
+  idNumber    String?
+  area        String? // khu vực hoạt động
+  isOnline    Boolean   @default(false)
+  lat         Float?
+  lng         Float?
+  locationAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+/// Chuyến giao hàng của một đơn
+model Delivery {
+  id             Int            @id @default(autoincrement())
+  orderId        Int            @unique
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  storeId        Int
+  store          Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  shipperId      Int?
+  shipper        User?          @relation("ShipperDeliveries", fields: [shipperId], references: [id], onDelete: SetNull)
+  status         DeliveryStatus @default(WAITING)
+  /// Thu nhập của tài xế (= phí giao hàng của đơn)
+  fee            Int            @default(0)
+  /// Tiền thu hộ khi giao (COD), 0 nếu đã thanh toán online
+  codAmount      Int            @default(0)
+  distanceKm     Float?
+  pickupAddress  String         @db.Text
+  pickupLat      Float?
+  pickupLng      Float?
+  dropoffAddress String         @db.Text
+  dropoffLat     Float?
+  dropoffLng     Float?
+  shipperLat     Float?
+  shipperLng     Float?
+  shipperLocAt   DateTime?
+  failReason     String?        @db.Text
+  assignedAt     DateTime?
+  pickedUpAt     DateTime?
+  deliveredAt    DateTime?
+  failedAt       DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([status])
+  @@index([shipperId, status])
   @@index([storeId])
 }
