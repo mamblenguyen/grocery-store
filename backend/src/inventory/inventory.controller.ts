@@ -68,6 +68,7 @@ export class InventoryService {
           { variant: { sku: { contains: q.search } } },
           { variant: { product: { name: { contains: q.search } } } },
           { note: { contains: q.search } },
+          { document: { code: { contains: q.search } } },
         ],
       }),
     };
@@ -77,6 +78,7 @@ export class InventoryService {
         include: {
           variant: { select: { sku: true, name: true, product: { select: { name: true } } } },
           user: { select: { fullName: true } },
+          document: { select: { id: true, code: true } },
         },
       }),
       this.prisma.inventoryLog.count({ where }),

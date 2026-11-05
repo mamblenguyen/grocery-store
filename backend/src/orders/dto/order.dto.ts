@@ -1,7 +1,7 @@
-import { OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
+import { OrderChannel, OrderStatus, PaymentStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
-  ArrayMinSize, IsArray, IsDateString, IsEnum, IsInt, IsOptional, IsString, Matches, Min, MinLength, ValidateNested,
+  ArrayMinSize, IsArray, IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, Min, MinLength, ValidateNested,
 } from 'class-validator';
 import { PaginationDto } from '../../common/pagination.dto';
 
@@ -22,11 +22,27 @@ export class CreateOrderDto extends PreviewOrderDto {
   @IsString() @Matches(/^[0-9+\s]{9,15}$/, { message: 'Số điện thoại không hợp lệ' }) phone: string;
   @IsString() @MinLength(5) address: string;
   @IsOptional() @IsString() note?: string;
-  @IsOptional() @IsEnum(PaymentMethod) paymentMethod?: PaymentMethod;
+  @IsOptional() @IsIn(['COD', 'BANK_TRANSFER', 'VNPAY']) paymentMethod?: 'COD' | 'BANK_TRANSFER' | 'VNPAY';
+  /** yyyy-mm-dd */
+  @IsOptional() @IsDateString() deliveryDate?: string;
+  @IsOptional() @IsString() deliverySlot?: string;
+}
+
+/** Bán tại quầy */
+export class PosOrderDto extends PreviewOrderDto {
+  @IsOptional() @IsString() customerName?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() note?: string;
+  @IsIn(['CASH', 'BANK_TRANSFER']) paymentMethod: 'CASH' | 'BANK_TRANSFER';
+  @IsOptional() @IsInt() @Min(0) cashReceived?: number;
+  /** Giảm giá trực tiếp tại quầy (VND) */
+  @IsOptional() @IsInt() @Min(0) manualDiscount?: number;
 }
 
 export class QueryOrdersDto extends PaginationDto {
   @IsOptional() @IsEnum(OrderStatus) status?: OrderStatus;
+  @IsOptional() @IsEnum(PaymentStatus) paymentStatus?: PaymentStatus;
+  @IsOptional() @IsEnum(OrderChannel) channel?: OrderChannel;
   @IsOptional() @IsDateString() from?: string;
   @IsOptional() @IsDateString() to?: string;
 }

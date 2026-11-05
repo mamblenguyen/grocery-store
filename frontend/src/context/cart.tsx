@@ -21,6 +21,8 @@ interface CartCtx {
   update: (variantId: number, qty: number) => void;
   remove: (variantId: number) => void;
   clear: () => void;
+  isOpen: boolean;
+  setOpen: (v: boolean) => void;
 }
 
 const KEY = 'grocery_cart';
@@ -29,6 +31,7 @@ const Ctx = createContext<CartCtx>(null as any);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [ready, setReady] = useState(false);
+  const [isOpen, setOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -66,6 +69,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         update,
         remove: (variantId) => setItems((list) => list.filter((i) => i.variantId !== variantId)),
         clear: () => setItems([]),
+        isOpen,
+        setOpen,
       }}
     >
       {children}

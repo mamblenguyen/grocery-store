@@ -15,8 +15,9 @@
  * Các tuỳ chọn --db-* được ghi lại vào backend/.env cho các lần chạy sau.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
+import { createInterface } from 'node:readline/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -46,6 +47,21 @@ const die = (msg) => {
 function run(cmd, cwd, env = {}) {
   const r = spawnSync(cmd, { cwd, shell: true, stdio: 'inherit', env: { ...process.env, ...env } });
   if (r.status !== 0) die(`Lệnh thất bại: ${cmd}  (thư mục ${cwd})`);
+}
+
+/** Chạy lệnh, vẫn in output ra màn hình nhưng giữ lại để phân tích lỗi */
+function runCapture(cmd, cwd) {
+  const r = spawnSync(cmd, { cwd, shell: true, stdio: ['inherit', 'pipe', 'pipe'], env: process.env, encoding: 'utf8' });
+  process.stdout.write(r.stdout ?? '');
+  process.stderr.write(r.stderr ?? '');
+  return { ok: r.status === 0, output: `${r.stdout ?? ''}${r.stderr ?? ''}` };
+}
+
+async function ask(question, def = '') {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const a = (await rl.question(`  ${question}${def !== '' ? gray(` (${def})`) : ''}: `)).trim();
+  rl.close();
+  return a === '' ? def : a;
 }
 
 /** Đọc / ghi 1 biến trong file .env (giữ nguyên các dòng khác) */
@@ -122,7 +138,14 @@ if (!args['skip-install']) {
   step('Cài dependencies');
   for (const dir of [API_DIR, WEB_DIR]) {
     const name = dir === API_DIR ? 'backend' : 'frontend';
-    if (existsSync(join(dir, 'node_modules', '.package-lock.json'))) ok(`${name}: đã cài`);
+    // Cài lại khi chưa có node_modules hoặc package.json / package-lock.json mới hơn bản đã cài
+    // (vd: vừa git pull / đổi nhánh có thêm thư viện)
+    const marker = join(dir, 'node_modules', '.package-lock.json');
+    const mtime = (f) => (existsSync(f) ? statSync(f).mtimeMs : 0);
+    const upToDate =
+      existsSync(marker) &&
+      mtime(marker) >= Math.max(mtime(join(dir, 'package.json')), mtime(join(dir, 'package-lock.json')));
+    if (upToDate) ok(`${name}: đã cài`);
     else {
       console.log(gray(`  npm install (${name})...`));
       run('npm install --no-audit --no-fund', dir);
@@ -134,8 +157,32 @@ if (!args['skip-install']) {
 // ───────────────────────────── 4. Migrate + seed ─────────────────────────────
 if (!args['skip-db']) {
   step('Database: migrate + seed');
-  // migrate deploy tự tạo database nếu chưa tồn tại
-  run('npx prisma migrate deploy', API_DIR);
+  // migrate deploy tự tạo database nếu chưa tồn tại.
+  // Sai user/mật khẩu (P1000) → hỏi lại ngay trong terminal, lưu vào backend/.env rồi thử lại
+  for (let attempt = 1; ; attempt++) {
+    const r = runCapture('npx prisma migrate deploy', API_DIR);
+    if (r.ok) break;
+    const authFailed = /P1000|Authentication failed|Access denied/i.test(r.output);
+    if (!authFailed) die('Lệnh thất bại: npx prisma migrate deploy (xem lỗi phía trên)');
+    if (!process.stdin.isTTY || attempt > 3)
+      die(
+        'Sai tài khoản MySQL. Sửa DATABASE_URL trong backend/.env hoặc chạy:\n' +
+          '  npm run dev -- --db-url="mysql://USER:MATKHAU@localhost:3306/grocery"\n' +
+          '  (XAMPP/Laragon thường là root không mật khẩu: mysql://root@localhost:3306/grocery)',
+      );
+    const cur = new URL(readEnv(API_ENV).DATABASE_URL);
+    console.log(yellow(`\n  ⚠ MySQL từ chối đăng nhập. Nhập tài khoản MySQL của bạn (Enter để giữ giá trị trong ngoặc):`));
+    const user = await ask('User', decodeURIComponent(cur.username) || 'root');
+    const pass = await ask('Mật khẩu (để trống nếu không có)');
+    const host = await ask('Host', cur.hostname);
+    const port = await ask('Port', cur.port || '3306');
+    const dbName = await ask('Tên database', cur.pathname.slice(1) || 'grocery');
+    const auth = encodeURIComponent(user) + (pass ? ':' + encodeURIComponent(pass) : '');
+    const url = `mysql://${auth}@${host}:${port}/${dbName}`;
+    setEnv(API_ENV, 'DATABASE_URL', url);
+    process.env.DATABASE_URL = url; // ghi đè biến đã nạp, Prisma đọc lại từ env
+    ok('Đã lưu vào backend/.env, thử kết nối lại...');
+  }
   run('npx prisma generate', API_DIR);
   run('npx prisma db seed', API_DIR); // tự bỏ qua nếu DB đã có dữ liệu
   ok('Database sẵn sàng');

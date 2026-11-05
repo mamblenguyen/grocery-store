@@ -13,13 +13,18 @@ grocery-store/
 │       ├── products/   # Sản phẩm + thuộc tính + biến thể
 │       ├── orders/     # Đặt hàng, luồng trạng thái, huỷ đơn & hoàn kho
 │       ├── coupons/    # Mã giảm giá (% / số tiền, giới hạn lượt, thời gian)
+│       ├── settings/   # Cài đặt cửa hàng
+│       ├── payments/   # VNPay, giao dịch thanh toán
+│       ├── stock/      # Phiếu nhập/xuất/kiểm kê, nhà cung cấp, tra mã
+│       ├── reviews/ wishlist/ addresses/
 │       ├── inventory/  # Tồn kho, nhập/xuất/điều chỉnh, lịch sử kho
 │       ├── dashboard/  # Thống kê doanh thu, top bán chạy, sắp hết hàng
 │       └── upload/     # Upload ảnh (Vercel Blob hoặc backend/uploads)
 ├── frontend/           # Next.js App Router (cổng 3000)
 │   └── src/app/
 │       ├── (shop)/     # Trang khách hàng
-│       └── admin/      # Trang quản trị
+│       ├── admin/      # Trang quản trị (POS, kho, cài đặt…)
+│       └── print/      # Trang in hoá đơn A4/K80, phiếu kho, tem QR
 ├── docker-compose.yml  # MySQL 8 (tuỳ chọn, nếu máy chưa có MySQL)
 ├── .github/workflows/  # CI/CD: test, deploy production & preview lên Vercel
 ├── scripts/            # dev.mjs (chạy local 1 lệnh), vercel-setup.sh, smoke-test.sh
@@ -29,30 +34,44 @@ grocery-store/
 
 ## ✨ Tính năng
 
-### Trang khách hàng (`http://localhost:3000`)
-- Trang chủ: banner, danh mục, sản phẩm nổi bật / bán chạy / mới về
-- Danh sách sản phẩm: tìm kiếm (tên, thương hiệu, SKU, mã vạch), lọc theo danh mục, khoảng giá, thương hiệu, còn hàng; sắp xếp; phân trang
-- Chi tiết sản phẩm: **chọn biến thể theo từng thuộc tính**, tự ẩn/đánh dấu tổ hợp hết hàng, giá & tồn kho theo biến thể, % giảm giá, sản phẩm liên quan
-- Giỏ hàng (lưu localStorage, đồng bộ giá/tồn kho với server)
-- Thanh toán: thông tin giao hàng, COD / chuyển khoản, **áp mã giảm giá**, miễn phí ship theo ngưỡng
-- Đăng ký / đăng nhập, cập nhật hồ sơ, đổi mật khẩu
-- Đơn hàng của tôi: lọc theo trạng thái, chi tiết + timeline, **huỷ đơn khi đang chờ xác nhận**
+### 🛒 Trang khách hàng (`http://localhost:3000`)
+- **Giao diện mới**: header có thanh thông báo, hotline, tìm kiếm gợi ý tức thì, menu danh mục; slider banner; khối "Giá sốc"; footer đầy đủ; **giỏ hàng trượt**; thanh điều hướng dưới cho **mobile**
+- Danh sách sản phẩm: lọc theo danh mục / khoảng giá / thương hiệu / còn hàng, sắp xếp, bộ lọc dạng ngăn kéo trên mobile
+- Chi tiết sản phẩm: **chọn biến thể theo từng thuộc tính** (tự đánh dấu tổ hợp hết hàng), thư viện ảnh, **đánh giá 1–5 sao** (chỉ người đã mua), sản phẩm liên quan
+- **Thanh toán**: chọn từ **sổ địa chỉ**, chọn **ngày & khung giờ giao**, mã giảm giá, miễn phí ship theo ngưỡng, 3 phương thức:
+  - COD (trả tiền khi nhận hàng)
+  - **Chuyển khoản VietQR**: mã QR tự điền số tiền & nội dung chuyển khoản
+  - **VNPay** (thẻ ATM / Visa / QR): ký HMAC-SHA512, xác thực Return URL + IPN, idempotent
+- Tài khoản: hồ sơ, đổi mật khẩu, **sổ địa chỉ**, **sản phẩm yêu thích**, đơn hàng (timeline, thanh toán lại VNPay, **mua lại**, **in hoá đơn**, huỷ đơn)
 
-### Trang quản trị (`http://localhost:3000/admin`)
-- **Tổng quan**: doanh thu, đơn hôm nay, biểu đồ doanh thu 7/14/30 ngày, đơn theo trạng thái, top bán chạy, cảnh báo sắp hết hàng
-- **Sản phẩm**: CRUD, upload ảnh, bật/tắt bán, nổi bật; **trình tạo biến thể** – khai báo tối đa 3 thuộc tính, hệ thống tự sinh tổ hợp; sửa SKU/mã vạch/giá bán/giá gốc/giá nhập/tồn kho/ngưỡng cảnh báo từng biến thể; áp giá/tồn hàng loạt
-- **Danh mục**: CRUD, danh mục cha/con, thứ tự, ẩn/hiện
-- **Đơn hàng**: lọc theo trạng thái/ngày/từ khoá; chuyển trạng thái theo luồng `Chờ xác nhận → Đã xác nhận → Đang giao → Hoàn thành` hoặc `Huỷ` (tự hoàn kho, hoàn lượt mã giảm giá); cập nhật thanh toán; in đơn
-- **Kho hàng**: tồn kho theo biến thể (lọc sắp hết / hết hàng), nhập thêm / xuất hao hụt / đặt số lượng, **lịch sử xuất nhập** (nhập, bán, huỷ đơn, điều chỉnh)
-- **Mã giảm giá**: % hoặc cố định, đơn tối thiểu, giảm tối đa, số lượt, thời gian hiệu lực
-- **Người dùng** (chỉ ADMIN): tìm kiếm, đổi vai trò (ADMIN / STAFF / CUSTOMER), khoá/mở khoá, xem lịch sử mua & tổng chi tiêu
+### 🛠 Trang quản trị (`http://localhost:3000/admin`)
+- **Tổng quan**: doanh thu, biểu đồ 7/14/30 ngày, trạng thái đơn, bán chạy, cảnh báo sắp hết hàng
+- **Bán tại quầy (POS)**: quét mã vạch / QR (máy quét USB hoặc **camera**), lưới chọn nhanh, giảm giá tay / mã giảm giá, tiền mặt (gợi ý mệnh giá, tính tiền thối) hoặc chuyển khoản QR, phím tắt **F9**, in bill K80 ngay
+- **Đơn hàng**: lọc theo trạng thái / kênh (Online, Tại quầy) / thanh toán / ngày, luồng trạng thái tự hoàn kho khi huỷ, xác nhận đã nhận tiền, lịch sử giao dịch, **xuất Excel (CSV)**, **in hoá đơn A4 / K80**
+- **Sản phẩm & biến thể** (tự sinh tổ hợp thuộc tính, SKU, mã vạch, giá bán / giá gốc / giá vốn), danh mục, mã giảm giá, **kiểm duyệt đánh giá**, người dùng & phân quyền
+- **Cài đặt cửa hàng**: tên, logo, liên hệ, thông báo; MST, VAT, lời cảm ơn trên hoá đơn; phí ship, đơn tối thiểu, khung giờ giao; bật/tắt phương thức thanh toán, tài khoản ngân hàng (xem trước QR); banner trang chủ; mạng xã hội
+
+### 📦 Xuất nhập kho
+- **Phiếu nhập kho** (PN): nhà cung cấp, số HĐ, giá nhập, số lô, hạn dùng → tự tính **giá vốn bình quân gia quyền**
+- **Phiếu xuất kho** (PX): hư hỏng / hết hạn / trả NCC / nội bộ – chặn xuất vượt tồn, ghi nhận giá vốn tại thời điểm xuất
+- **Phiếu kiểm kê** (KK): chụp tồn hệ thống lúc hoàn tất, ghi chênh lệch số lượng & giá trị
+- Quy trình **Nháp → Hoàn tất → Huỷ**; huỷ phiếu đã hoàn tất sẽ **đảo ngược chính xác** tồn kho & giá vốn; mọi thao tác chạy trong transaction
+- Thêm hàng bằng **quét QR / mã vạch** (camera điện thoại / webcam hoặc máy quét USB), quét lại cùng mã tự cộng dồn
+- **Tồn kho**: giá trị tồn theo giá vốn & giá bán, biên lợi nhuận, sắp hết / hết hàng, điều chỉnh nhanh có lý do
+- **Lịch sử xuất nhập** đầy đủ (nhập, xuất, kiểm kê, bán hàng, huỷ đơn, điều chỉnh) có liên kết chứng từ
+- **Nhà cung cấp**; **in tem QR** (40×30, 50×40 hoặc lưới A4) để dán kệ / sản phẩm
+- **In phiếu kho** theo mẫu 01-VT / 02-VT / 05-VT kèm 4 chữ ký
+
+### 🧾 Hoá đơn
+- **A4**: thông tin cửa hàng + MST, số hoá đơn, khách hàng, bảng hàng hoá, chiết khấu, phí ship, **tách thuế GTGT** (giá đã gồm VAT), **số tiền bằng chữ**, QR tra cứu, QR chuyển khoản nếu chưa thanh toán, chữ ký người mua / người bán
+- **K80** cho máy in nhiệt: dùng tại quầy, có tiền khách đưa / tiền thối
+- Lưu ý: đây là hoá đơn bán lẻ nội bộ. Hoá đơn GTGT điện tử theo NĐ 123/2020 cần phát hành qua nhà cung cấp HĐĐT.
 
 ### Nghiệp vụ được đảm bảo ở backend
-- Trừ kho **trong transaction** với điều kiện `stock >= quantity` → không bán vượt tồn khi nhiều người đặt cùng lúc
-- Giá đơn hàng luôn tính lại ở server (không tin giá từ client)
-- Lưu snapshot tên/giá/SKU vào `OrderItem` → sửa/xoá sản phẩm không ảnh hưởng đơn cũ
-- Cập nhật sản phẩm giữ nguyên ID biến thể cũ, mọi thay đổi tồn kho được ghi log
-- Phân quyền bằng JWT + role guard; lỗi Prisma được chuyển thành HTTP 404/409/400 dễ hiểu
+- Trừ kho **trong transaction** với điều kiện `stock >= quantity` → không bán vượt tồn khi đặt đồng thời
+- Giá đơn hàng, phí ship, mã giảm giá luôn tính lại ở server; khung giờ / phương thức thanh toán được kiểm tra theo cài đặt
+- Lưu snapshot tên/giá/SKU vào `OrderItem`; mọi biến động tồn kho được ghi log kèm giá vốn
+- Phân quyền JWT: ADMIN / STAFF (bán hàng, kho) / CUSTOMER
 
 ## 🗃 Mô hình dữ liệu biến thể
 
@@ -126,6 +145,12 @@ Mã giảm giá mẫu: `WELCOME10` (giảm 10%, tối đa 50k, đơn từ 100k),
 | GET/POST | `/api/admin/inventory`, `/logs`, `/adjust` | Kho hàng |
 | GET | `/api/admin/dashboard?days=7` | Thống kê |
 | GET | `/api/health` | Kiểm tra API + kết nối DB |
+| GET / PUT | `/api/settings`, `/api/admin/settings` | Cài đặt cửa hàng (public / admin) |
+| POST | `/api/payments/vnpay/create` · GET `/vnpay/return` · GET `/vnpay/ipn` | Thanh toán VNPay |
+| POST | `/api/admin/orders/pos` · GET `/api/admin/orders/export` | Bán tại quầy, xuất CSV |
+| GET / POST / PUT | `/api/admin/stock/documents` (+ `/:id/complete`, `/:id/cancel`) | Phiếu nhập / xuất / kiểm kê |
+| GET | `/api/admin/stock/lookup?code=` | Tra mã vạch / SKU / QR |
+| * | `/api/admin/suppliers`, `/api/addresses`, `/api/wishlist`, `/api/products/:id/reviews`, `/api/admin/reviews` | NCC, địa chỉ, yêu thích, đánh giá |
 | GET/PATCH | `/api/admin/users` | Người dùng (ADMIN) |
 | POST | `/api/admin/upload` (multipart `files`) | Upload ảnh |
 
@@ -144,7 +169,16 @@ Payload tạo sản phẩm có biến thể:
 }
 ```
 
+## 💳 Cấu hình VNPay (tuỳ chọn)
+1. Đăng ký tài khoản sandbox miễn phí: https://sandbox.vnpayment.vn/devreg/
+2. Thêm vào `backend/.env`: `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET` (và `VNPAY_RETURN_URL` nếu frontend không chạy ở localhost:3000)
+3. Trên môi trường thật, khai báo IPN URL `https://<api-domain>/api/payments/vnpay/ipn` với VNPay
+Khi chưa cấu hình, VNPay tự ẩn khỏi trang thanh toán.
+
+## 📷 Quét mã bằng camera
+Trình duyệt chỉ cho mở camera trên **HTTPS** hoặc **http://localhost**. Để dùng điện thoại quét khi chạy ở máy tính, truy cập qua HTTPS (vd `ngrok http 3000`) hoặc dùng máy quét mã vạch USB (hoạt động như bàn phím, không cần cấu hình).
+
 ## ⚙️ Biến môi trường
 
-**backend/.env**: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `SHIPPING_FEE`, `FREE_SHIPPING_THRESHOLD`, `BLOB_READ_WRITE_TOKEN`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`
+**backend/.env**: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `BLOB_READ_WRITE_TOKEN`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_URL`, `VNPAY_RETURN_URL`
 **frontend/.env.local**: `NEXT_PUBLIC_API_URL`

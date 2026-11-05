@@ -1,12 +1,14 @@
 'use client';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { AuthShell } from '@/components/shop/AuthShell';
 import { useAuth } from '@/context/auth';
 
-export default function RegisterPage() {
+function RegisterInner() {
   const { register } = useAuth();
   const router = useRouter();
+  const next = useSearchParams().get('next');
   const [form, setForm] = useState({ fullName: '', email: '', phone: '', password: '', confirm: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,35 +17,27 @@ export default function RegisterPage() {
     e.preventDefault();
     if (form.password !== form.confirm) return setError('Mật khẩu nhập lại không khớp');
     setLoading(true);
-    try {
-      const { confirm, ...data } = form;
-      await register(data);
-      router.push('/');
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    try { const { confirm, ...data } = form; await register(data); router.push(next || '/'); }
+    catch (e: any) { setError(e.message); } finally { setLoading(false); }
   };
-
-  const f = (k: keyof typeof form, label: string, type = 'text', required = true) => (
-    <div><label className="label">{label}</label>
-      <input className="input" type={type} required={required} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} /></div>
+  const f = (k: keyof typeof form, label: string, type = 'text', required = true, auto?: string) => (
+    <div><label className="label">{label}</label><input className="input" type={type} autoComplete={auto} required={required} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} /></div>
   );
 
   return (
-    <div className="mx-auto max-w-md">
-      <form onSubmit={submit} className="card space-y-4">
-        <h1 className="text-center text-2xl font-bold">Tạo tài khoản</h1>
-        {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-        {f('fullName', 'Họ tên')}
-        {f('email', 'Email', 'email')}
-        {f('phone', 'Số điện thoại', 'tel', false)}
-        {f('password', 'Mật khẩu (tối thiểu 6 ký tự)', 'password')}
-        {f('confirm', 'Nhập lại mật khẩu', 'password')}
-        <button className="btn-primary w-full py-3" disabled={loading}>{loading ? 'Đang xử lý...' : 'Đăng ký'}</button>
-        <p className="text-center text-sm">Đã có tài khoản? <Link href="/login" className="text-brand-700 hover:underline">Đăng nhập</Link></p>
+    <AuthShell title="Tạo tài khoản" subtitle="Chỉ mất 30 giây để bắt đầu mua sắm">
+      <form onSubmit={submit} className="space-y-4">
+        {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+        {f('fullName', 'Họ và tên', 'text', true, 'name')}
+        <div className="grid gap-4 sm:grid-cols-2">{f('email', 'Email', 'email', true, 'email')}{f('phone', 'Số điện thoại', 'tel', false, 'tel')}</div>
+        <div className="grid gap-4 sm:grid-cols-2">{f('password', 'Mật khẩu (≥ 6 ký tự)', 'password', true, 'new-password')}{f('confirm', 'Nhập lại mật khẩu', 'password', true, 'new-password')}</div>
+        <button className="btn-primary btn-lg w-full" disabled={loading}>{loading ? 'Đang tạo tài khoản…' : 'Đăng ký'}</button>
+        <p className="text-center text-sm text-slate-500">Đã có tài khoản? <Link href="/login" className="link">Đăng nhập</Link></p>
       </form>
-    </div>
+    </AuthShell>
   );
+}
+
+export default function RegisterPage() {
+  return <Suspense><RegisterInner /></Suspense>;
 }

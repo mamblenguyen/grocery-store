@@ -85,7 +85,7 @@ export default function CouponsPage() {
           </table>
         )}
       </div>
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa mã giảm giá' : 'Tạo mã giảm giá'}>
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa mã giảm giá' : 'Tạo mã giảm giá'} size="lg">
         <form onSubmit={save} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div><label className="label">Mã *</label><input className="input uppercase" required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} /></div>

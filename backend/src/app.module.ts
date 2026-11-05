@@ -10,6 +10,12 @@ import { InventoryModule } from './inventory/inventory.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { UploadModule } from './upload/upload.module';
 import { HealthController } from './health.controller';
+import { SettingsModule } from './settings/settings.module';
+import { PaymentsModule } from './payments/payments.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { WishlistModule } from './wishlist/wishlist.module';
+import { AddressesModule } from './addresses/addresses.module';
+import { StockModule } from './stock/stock.module';
 
 @Module({
   imports: [
@@ -23,6 +29,12 @@ import { HealthController } from './health.controller';
     InventoryModule,
     DashboardModule,
     UploadModule,
+    SettingsModule,
+    PaymentsModule,
+    ReviewsModule,
+    WishlistModule,
+    AddressesModule,
+    StockModule,
   ],
   controllers: [HealthController],
 })

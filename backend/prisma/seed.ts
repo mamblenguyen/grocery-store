@@ -13,6 +13,14 @@ type Seed = {
   variants: Record<string, { price: number; compareAtPrice?: number; stock: number }>;
 };
 
+/** Mã vạch EAN-13 hợp lệ (đầu 893 = Việt Nam) */
+function ean13(n: number) {
+  const body = `893${String(n).padStart(9, '0')}`;
+  const sum = [...body].reduce((s, d, i) => s + Number(d) * (i % 2 ? 3 : 1), 0);
+  return body + ((10 - (sum % 10)) % 10);
+}
+let barcodeSeq = 100001;
+
 const img = (seed: string) => `https://picsum.photos/seed/${seed}/600/600`;
 
 const categories = [
@@ -137,6 +145,12 @@ async function main() {
   if (force && process.env.VERCEL_ENV === 'production') throw new Error('Không cho phép FORCE_SEED trên production');
   console.log('🌱 Seeding...');
   await prisma.inventoryLog.deleteMany();
+  await prisma.stockDocument.deleteMany();
+  await prisma.supplier.deleteMany();
+  await prisma.paymentTransaction.deleteMany();
+  await prisma.review.deleteMany();
+  await prisma.wishlistItem.deleteMany();
+  await prisma.address.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.product.deleteMany();
@@ -185,13 +199,14 @@ async function main() {
       valueIds.push(new Map(opt.values.map((v) => [v.value, v.id])));
     }
     let pos = 0;
-    const prefix = slugify(p.brand).slice(0, 4).toUpperCase();
+    const prefix = slugify(p.brand).replace(/-/g, '').slice(0, 4).toUpperCase();
     for (const [key, v] of Object.entries(p.variants)) {
       const parts = p.options.length ? key.split(' / ') : [];
       const variant = await prisma.productVariant.create({
         data: {
           productId: product.id, name: key, position: pos,
           sku: `${prefix}-${product.id}-${String(++pos).padStart(2, '0')}`,
+          barcode: ean13(barcodeSeq++),
           price: v.price, compareAtPrice: v.compareAtPrice, costPrice: Math.round(v.price * 0.8), stock: v.stock,
           optionValues: { create: parts.map((val, idx) => ({ optionValueId: valueIds[idx].get(val)! })) },
         },
@@ -200,6 +215,13 @@ async function main() {
         await prisma.inventoryLog.create({ data: { variantId: variant.id, change: v.stock, stockAfter: v.stock, reason: 'IMPORT', note: 'Seed' } });
     }
   }
+
+  await prisma.supplier.createMany({
+    data: [
+      { name: 'Công ty TNHH Phân phối Hàng tiêu dùng Sài Gòn', contactName: 'Anh Minh', phone: '0281234567', email: 'sales@pptdsg.vn', taxCode: '0301234567', address: '45 Nguyễn Văn Cừ, Q.5, TP.HCM' },
+      { name: 'Nông trại Rau sạch Đà Lạt', contactName: 'Chị Lan', phone: '0909888777', address: 'Phường 7, TP. Đà Lạt, Lâm Đồng' },
+    ],
+  });
 
   await prisma.coupon.createMany({
     data: [

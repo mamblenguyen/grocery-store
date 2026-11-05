@@ -1,7 +1,8 @@
 'use client';
+import { AlertTriangle, ArrowRight, DollarSign, Package, ReceiptText, ShoppingBag, TrendingUp, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Spinner, StatusBadge } from '@/components/ui';
+import { Spinner, StatCard, StatusBadge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { dateTime, money, ORDER_STATUS } from '@/lib/format';
 import type { Order } from '@/lib/types';
@@ -18,101 +19,94 @@ interface Dashboard {
 export default function AdminDashboard() {
   const [days, setDays] = useState(7);
   const [d, setD] = useState<Dashboard | null>(null);
-
-  useEffect(() => {
-    api<Dashboard>(`/admin/dashboard?days=${days}`).then(setD);
-  }, [days]);
-
+  useEffect(() => { api<Dashboard>(`/admin/dashboard?days=${days}`).then(setD); }, [days]);
   if (!d) return <Spinner />;
   const max = Math.max(1, ...d.chart.map((c) => c.revenue));
-
-  const stats = [
-    { label: 'Doanh thu (đơn hoàn thành)', value: money(d.stats.revenue) },
-    { label: 'Doanh thu hôm nay', value: money(d.stats.todayRevenue) },
-    { label: 'Tổng đơn / Hôm nay', value: `${d.stats.orders} / ${d.stats.todayOrders}` },
-    { label: 'Khách hàng', value: d.stats.customers },
-    { label: 'Sản phẩm đang bán', value: d.stats.products },
-  ];
+  const periodRevenue = d.chart.reduce((s, c) => s + c.revenue, 0);
+  const totalOrders = Object.values(d.ordersByStatus).reduce((a, b) => a + b, 0) || 1;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Tổng quan</h1>
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        {stats.map((s) => (
-          <div key={s.label} className="card">
-            <div className="text-xs text-gray-500">{s.label}</div>
-            <div className="mt-1 text-xl font-bold">{s.value}</div>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard icon={<DollarSign className="h-5 w-5" />} label="Doanh thu hôm nay" value={money(d.stats.todayRevenue)} hint={`${d.stats.todayOrders} đơn hôm nay`} />
+        <StatCard icon={<TrendingUp className="h-5 w-5" />} tone="sky" label={`Doanh thu ${days} ngày`} value={money(periodRevenue)} hint={`Tổng đã hoàn thành: ${money(d.stats.revenue)}`} />
+        <StatCard icon={<ReceiptText className="h-5 w-5" />} tone="violet" label="Tổng đơn hàng" value={d.stats.orders} hint={`${d.ordersByStatus.PENDING ?? 0} đơn chờ xác nhận`} />
+        <StatCard icon={<Users className="h-5 w-5" />} tone="accent" label="Khách hàng" value={d.stats.customers} hint={`${d.stats.products} sản phẩm đang bán`} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="card lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold">Doanh thu theo ngày</h2>
-            <select className="input w-32" value={days} onChange={(e) => setDays(Number(e.target.value))}>
-              <option value={7}>7 ngày</option><option value={14}>14 ngày</option><option value={30}>30 ngày</option>
-            </select>
+      <div className="grid gap-6 xl:grid-cols-3">
+        <div className="card xl:col-span-2">
+          <div className="mb-5 flex items-center justify-between">
+            <div><h2 className="font-bold text-ink">Doanh thu theo ngày</h2><p className="text-xs text-slate-400">Không tính đơn đã huỷ</p></div>
+            <div className="flex rounded-xl bg-slate-100 p-1">{[7, 14, 30].map((n) => <button key={n} onClick={() => setDays(n)} className={`rounded-lg px-3 py-1 text-xs font-semibold ${days === n ? 'bg-white text-ink shadow-sm' : 'text-slate-500'}`}>{n} ngày</button>)}</div>
           </div>
-          <div className="flex h-56 items-end gap-1">
+          <div className="flex h-64 items-end gap-1.5">
             {d.chart.map((c) => (
-              <div key={c.date} className="group relative flex flex-1 flex-col items-center justify-end">
-                <div className="absolute -top-12 hidden rounded bg-gray-800 px-2 py-1 text-xs whitespace-nowrap text-white group-hover:block">
-                  {money(c.revenue)} · {c.orders} đơn
-                </div>
-                <div className="w-full rounded-t bg-brand-500 transition hover:bg-brand-700" style={{ height: `${(c.revenue / max) * 100}%`, minHeight: c.revenue ? 4 : 1 }} />
-                <div className="mt-1 text-[10px] text-gray-500">{c.date.slice(8)}/{c.date.slice(5, 7)}</div>
+              <div key={c.date} className="group relative flex h-full flex-1 flex-col items-center justify-end">
+                <div className="pointer-events-none absolute bottom-full mb-1 hidden rounded-lg bg-ink px-2.5 py-1.5 text-xs whitespace-nowrap text-white shadow-lg group-hover:block">{money(c.revenue)}<br />{c.orders} đơn · {c.date.slice(8)}/{c.date.slice(5, 7)}</div>
+                <div className="w-full max-w-10 rounded-t-lg bg-gradient-to-t from-brand-600 to-brand-400 transition group-hover:from-brand-700" style={{ height: `${(c.revenue / max) * 100}%`, minHeight: c.revenue ? 6 : 2 }} />
+                {(d.chart.length <= 14 || Number(c.date.slice(8)) % 3 === 0) && <div className="mt-1.5 text-[10px] text-slate-400">{c.date.slice(8)}/{c.date.slice(5, 7)}</div>}
               </div>
             ))}
           </div>
         </div>
         <div className="card">
-          <h2 className="mb-3 font-semibold">Đơn theo trạng thái</h2>
-          <div className="space-y-2">
-            {Object.entries(ORDER_STATUS).map(([k, v]) => (
-              <Link key={k} href={`/admin/orders?status=${k}`} className="flex items-center justify-between rounded-lg p-2 hover:bg-gray-50">
-                <span className={`badge ${v.cls}`}>{v.label}</span><b>{d.ordersByStatus[k] ?? 0}</b>
-              </Link>
-            ))}
+          <h2 className="mb-4 font-bold text-ink">Trạng thái đơn hàng</h2>
+          <div className="space-y-3">
+            {Object.entries(ORDER_STATUS).map(([k, v]) => {
+              const n = d.ordersByStatus[k] ?? 0;
+              return (
+                <Link key={k} href={`/admin/orders?status=${k}`} className="block">
+                  <div className="mb-1 flex justify-between text-sm"><span className={`badge ${v.cls}`}>{v.label}</span><b className="text-ink">{n}</b></div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand-500" style={{ width: `${(n / totalOrders) * 100}%` }} /></div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="card lg:col-span-2">
-          <div className="mb-3 flex justify-between"><h2 className="font-semibold">Đơn hàng mới nhất</h2><Link href="/admin/orders" className="text-sm text-brand-700">Xem tất cả</Link></div>
-          <table className="table">
-            <thead><tr><th>Mã</th><th>Khách</th><th>Tổng</th><th>Trạng thái</th><th>Thời gian</th></tr></thead>
-            <tbody>
-              {d.recentOrders.map((o) => (
-                <tr key={o.id}>
-                  <td><Link href={`/admin/orders/${o.id}`} className="font-medium text-brand-700">{o.code}</Link></td>
-                  <td>{o.customerName}</td><td>{money(o.total)}</td><td><StatusBadge status={o.status} /></td>
-                  <td className="text-xs text-gray-500">{dateTime(o.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="grid gap-6 xl:grid-cols-3">
+        <div className="card p-0 xl:col-span-2">
+          <div className="flex items-center justify-between p-5 pb-3"><h2 className="font-bold text-ink">Đơn hàng mới nhất</h2><Link href="/admin/orders" className="flex items-center gap-1 text-sm font-semibold text-brand-700">Xem tất cả <ArrowRight className="h-4 w-4" /></Link></div>
+          <div className="overflow-x-auto">
+            <table className="table">
+              <thead><tr><th>Mã</th><th>Khách</th><th>Kênh</th><th className="text-right">Tổng</th><th>Trạng thái</th><th>Thời gian</th></tr></thead>
+              <tbody>
+                {d.recentOrders.map((o) => (
+                  <tr key={o.id}>
+                    <td><Link href={`/admin/orders/${o.id}`} className="font-semibold text-brand-700">{o.code}</Link></td>
+                    <td>{o.customerName}</td>
+                    <td><span className={`badge ${o.channel === 'POS' ? 'bg-violet-100 text-violet-800' : 'bg-sky-100 text-sky-800'}`}>{o.channel === 'POS' ? 'Tại quầy' : 'Online'}</span></td>
+                    <td className="text-right font-semibold">{money(o.total)}</td>
+                    <td><StatusBadge status={o.status} /></td>
+                    <td className="text-xs text-slate-500">{dateTime(o.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
         <div className="space-y-6">
           <div className="card">
-            <h2 className="mb-3 font-semibold">Top bán chạy</h2>
+            <h2 className="mb-3 flex items-center gap-2 font-bold text-ink"><ShoppingBag className="h-4 w-4 text-brand-600" /> Bán chạy</h2>
             {d.topProducts.map((t, i) => (
-              <div key={t.productId ?? i} className="flex justify-between py-1 text-sm">
-                <span>{i + 1}. {t.productName}</span><span className="text-gray-500">{t.quantity} SP</span>
+              <div key={t.productId ?? i} className="flex items-center gap-3 py-2 text-sm">
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${i === 0 ? 'bg-amber-400 text-white' : 'bg-slate-100 text-slate-500'}`}>{i + 1}</span>
+                <span className="flex-1 truncate">{t.productName}</span><span className="font-semibold text-ink">{t.quantity}</span>
               </div>
             ))}
-            {!d.topProducts.length && <div className="text-sm text-gray-500">Chưa có dữ liệu</div>}
+            {!d.topProducts.length && <div className="text-sm text-slate-400">Chưa có dữ liệu</div>}
           </div>
           <div className="card">
-            <div className="mb-3 flex justify-between"><h2 className="font-semibold">⚠ Sắp hết hàng</h2><Link href="/admin/inventory?filter=low" className="text-sm text-brand-700">Kho</Link></div>
+            <div className="mb-3 flex items-center justify-between"><h2 className="flex items-center gap-2 font-bold text-ink"><AlertTriangle className="h-4 w-4 text-accent-500" /> Sắp hết hàng</h2><Link href="/admin/stock/new?type=IMPORT" className="text-xs font-semibold text-brand-700">+ Nhập hàng</Link></div>
             {d.lowStock.map((v) => (
-              <div key={v.id} className="flex justify-between py-1 text-sm">
-                <span className="truncate">{v.productName} <span className="text-gray-500">({v.name})</span></span>
-                <span className={v.stock <= 0 ? 'font-bold text-red-600' : 'text-orange-600'}>{v.stock}</span>
+              <div key={v.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+                <span className="min-w-0 truncate"><Package className="mr-1.5 inline h-3.5 w-3.5 text-slate-400" />{v.productName} <span className="text-slate-400">({v.name})</span></span>
+                <span className={`badge ${v.stock <= 0 ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>{v.stock}</span>
               </div>
             ))}
-            {!d.lowStock.length && <div className="text-sm text-gray-500">Tồn kho ổn định</div>}
+            {!d.lowStock.length && <div className="text-sm text-slate-400">Tồn kho ổn định 👍</div>}
           </div>
         </div>
       </div>

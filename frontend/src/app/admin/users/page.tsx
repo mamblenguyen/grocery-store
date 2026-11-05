@@ -68,7 +68,7 @@ export default function UsersPage() {
       </div>
       {data && <Pagination page={data.page} totalPages={data.totalPages} onChange={(page) => setFilter({ ...filter, page })} />}
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} title="Chi tiết khách hàng" wide>
+      <Modal open={!!detail} onClose={() => setDetail(null)} title="Chi tiết khách hàng" size="lg">
         {detail && (
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-2 gap-2">

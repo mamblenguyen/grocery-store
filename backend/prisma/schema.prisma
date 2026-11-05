@@ -27,6 +27,19 @@ enum OrderStatus {
 enum PaymentMethod {
   COD
   BANK_TRANSFER
+  VNPAY
+  CASH // bán tại quầy
+}
+
+enum OrderChannel {
+  ONLINE
+  POS
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
 }
 
 enum PaymentStatus {
@@ -41,10 +54,24 @@ enum DiscountType {
 }
 
 enum InventoryReason {
+  IMPORT // nhập kho (phiếu nhập / nhập nhanh)
+  EXPORT // xuất kho (hư hỏng, hết hạn, trả NCC, nội bộ)
+  STOCKTAKE // chênh lệch kiểm kê
+  ORDER // bán hàng
+  CANCEL // huỷ đơn hoàn kho
+  ADJUST // điều chỉnh tay
+}
+
+enum StockDocType {
   IMPORT
-  ORDER
-  CANCEL
-  ADJUST
+  EXPORT
+  STOCKTAKE
+}
+
+enum StockDocStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
 }
 
 model User {
@@ -60,7 +87,13 @@ model User {
   updatedAt DateTime @updatedAt
 
   orders        Order[]
+  createdOrders Order[]         @relation("OrderCreatedBy")
   inventoryLogs InventoryLog[]
+  reviews       Review[]
+  wishlist      WishlistItem[]
+  addresses     Address[]
+  docsCreated   StockDocument[] @relation("DocCreatedBy")
+  docsCompleted StockDocument[] @relation("DocCompletedBy")
 }
 
 model Category {
@@ -94,11 +127,15 @@ model Product {
   minPrice    Int       @default(0)
   maxPrice    Int       @default(0)
   soldCount   Int       @default(0)
+  ratingAvg   Float     @default(0)
+  ratingCount Int       @default(0)
   categoryId  Int?
   category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   options  ProductOption[]
   variants ProductVariant[]
+  reviews  Review[]
+  wishedBy WishlistItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -146,11 +183,13 @@ model ProductVariant {
   optionValues  VariantOptionValue[]
   orderItems    OrderItem[]
   inventoryLogs InventoryLog[]
+  stockDocItems StockDocumentItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([productId])
+  @@index([barcode])
 }
 
 model VariantOptionValue {
@@ -163,26 +202,34 @@ model VariantOptionValue {
 }
 
 model Order {
-  id            Int           @id @default(autoincrement())
-  code          String        @unique
+  id            Int                  @id @default(autoincrement())
+  code          String               @unique
   userId        Int?
-  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user          User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdById   Int? // nhân viên tạo đơn (POS)
+  createdBy     User?                @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  channel       OrderChannel         @default(ONLINE)
+  deliveryDate  DateTime?            @db.Date
+  deliverySlot  String?
+  paidAt        DateTime?
+  cashReceived  Int? // tiền khách đưa (POS)
   customerName  String
   phone         String
-  address       String        @db.Text
-  note          String?       @db.Text
-  status        OrderStatus   @default(PENDING)
-  paymentMethod PaymentMethod @default(COD)
-  paymentStatus PaymentStatus @default(UNPAID)
+  address       String               @db.Text
+  note          String?              @db.Text
+  status        OrderStatus          @default(PENDING)
+  paymentMethod PaymentMethod        @default(COD)
+  paymentStatus PaymentStatus        @default(UNPAID)
   subtotal      Int
-  discount      Int           @default(0)
-  shippingFee   Int           @default(0)
+  discount      Int                  @default(0)
+  shippingFee   Int                  @default(0)
   total         Int
   couponCode    String?
-  cancelReason  String?       @db.Text
+  cancelReason  String?              @db.Text
   items         OrderItem[]
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  payments      PaymentTransaction[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
 
   @@index([userId])
   @@index([status])
@@ -230,9 +277,140 @@ model InventoryLog {
   stockAfter Int
   reason     InventoryReason
   note       String?         @db.Text
+  unitCost   Int? // giá vốn của lần nhập/xuất
+  documentId Int?
+  document   StockDocument?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
   userId     Int?
   user       User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt  DateTime        @default(now())
 
   @@index([variantId])
+}
+
+model PaymentTransaction {
+  id            Int               @id @default(autoincrement())
+  orderId       Int
+  order         Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider      PaymentMethod
+  amount        Int
+  status        TransactionStatus @default(PENDING)
+  txnRef        String            @unique // mã giao dịch gửi sang cổng thanh toán
+  transactionNo String? // mã giao dịch phía cổng thanh toán / ngân hàng
+  bankCode      String?
+  responseCode  String?
+  message       String?           @db.Text
+  rawData       Json?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([orderId])
+}
+
+/// Cấu hình cửa hàng dạng key-value (key "store" chứa toàn bộ cài đặt)
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int // 1-5
+  comment   String?  @db.Text
+  isVisible Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, userId])
+  @@index([productId, isVisible])
+}
+
+model WishlistItem {
+  userId    Int
+  productId Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, productId])
+}
+
+model Address {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String? // Nhà riêng, Công ty...
+  fullName  String
+  phone     String
+  address   String   @db.Text
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Supplier {
+  id          Int             @id @default(autoincrement())
+  name        String
+  contactName String?
+  phone       String?
+  email       String?
+  address     String?         @db.Text
+  taxCode     String?
+  note        String?         @db.Text
+  isActive    Boolean         @default(true)
+  documents   StockDocument[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+/// Phiếu kho: nhập (PN), xuất (PX), kiểm kê (KK)
+model StockDocument {
+  id            Int                 @id @default(autoincrement())
+  code          String              @unique
+  type          StockDocType
+  status        StockDocStatus      @default(DRAFT)
+  supplierId    Int?
+  supplier      Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  reason        String? // phiếu xuất: DAMAGED | EXPIRED | RETURN_SUPPLIER | INTERNAL | OTHER
+  invoiceNo     String? // số hoá đơn của nhà cung cấp
+  note          String?             @db.Text
+  totalQuantity Int                 @default(0)
+  totalAmount   Int                 @default(0)
+  createdById   Int?
+  createdBy     User?               @relation("DocCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  completedById Int?
+  completedBy   User?               @relation("DocCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+  cancelReason  String?             @db.Text
+  items         StockDocumentItem[]
+  logs          InventoryLog[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([type, status])
+}
+
+model StockDocumentItem {
+  id         Int            @id @default(autoincrement())
+  documentId Int
+  document   StockDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  variantId  Int
+  variant    ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  /// Nhập/Xuất: số lượng. Kiểm kê: số lượng đếm thực tế
+  quantity   Int
+  /// Kiểm kê: tồn trên hệ thống tại thời điểm hoàn tất phiếu
+  systemQty  Int?
+  unitCost   Int            @default(0)
+  total      Int            @default(0)
+  lotNo      String?
+  expiryDate DateTime?      @db.Date
+  note       String?
+
+  @@index([documentId])
 }
