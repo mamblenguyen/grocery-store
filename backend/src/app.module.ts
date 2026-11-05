@@ -1,4 +1,9 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { MailModule } from './mail/mail.service';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ReportsModule } from './reports/reports.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -19,7 +24,12 @@ import { StockModule } from './stock/stock.module';
 
 @Module({
   imports: [
+    // Giới hạn chung 1000 request/phút/IP; các API đăng nhập có giới hạn riêng chặt hơn
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 1000 }]),
     PrismaModule,
+    MailModule,
+    NotificationsModule,
+    ReportsModule,
     AuthModule,
     UsersModule,
     CategoriesModule,
@@ -37,5 +47,6 @@ import { StockModule } from './stock/stock.module';
     StockModule,
   ],
   controllers: [HealthController],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

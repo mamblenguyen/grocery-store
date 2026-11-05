@@ -1,5 +1,5 @@
 'use client';
-import { Heart, LogOut, MapPin, Package, User } from 'lucide-react';
+import { Bell, Heart, LogOut, MapPin, Package, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -11,6 +11,7 @@ const MENU = [
   { href: '/orders', label: 'Đơn hàng của tôi', icon: Package },
   { href: '/account/addresses', label: 'Sổ địa chỉ', icon: MapPin },
   { href: '/account/wishlist', label: 'Sản phẩm yêu thích', icon: Heart },
+  { href: '/account/notifications', label: 'Thông báo', icon: Bell },
 ];
 
 export function AccountShell({ children }: { children: React.ReactNode }) {

@@ -236,10 +236,10 @@ export default function ProductDetailPage() {
             </span>
           </div>
 
-          <div className="mt-6 flex gap-3">
-            <button className="btn-outline btn-lg flex-1 border-2 border-brand-600 text-brand-700 hover:bg-brand-50" disabled={!variant || variant.stock <= 0} onClick={() => addToCart()}><ShoppingCart className="h-5 w-5" /> Thêm vào giỏ</button>
-            <button className="btn-primary btn-lg flex-1" disabled={!variant || variant.stock <= 0} onClick={() => addToCart(true)}><Zap className="h-5 w-5" /> Mua ngay</button>
-            <button onClick={() => wl.toggle(p.id)} className="btn-outline btn-lg px-4" aria-label="Yêu thích"><Heart className={`h-5 w-5 ${wl.has(p.id) ? 'fill-red-500 text-red-500' : ''}`} /></button>
+          <div className="mt-6 flex gap-2 sm:gap-3">
+            <button className="btn-outline btn-lg min-w-0 flex-1 border-2 border-brand-600 px-3 text-sm text-brand-700 hover:bg-brand-50 sm:px-6 sm:text-base" disabled={!variant || variant.stock <= 0} onClick={() => addToCart()}><ShoppingCart className="hidden h-5 w-5 sm:block" /> Thêm vào giỏ</button>
+            <button className="btn-primary btn-lg min-w-0 flex-1 px-3 text-sm sm:px-6 sm:text-base" disabled={!variant || variant.stock <= 0} onClick={() => addToCart(true)}><Zap className="hidden h-5 w-5 sm:block" /> Mua ngay</button>
+            <button onClick={() => wl.toggle(p.id)} className="btn-outline btn-lg shrink-0 px-3 sm:px-4" aria-label="Yêu thích"><Heart className={`h-5 w-5 ${wl.has(p.id) ? 'fill-red-500 text-red-500' : ''}`} /></button>
           </div>
 
           <div className="mt-6 grid gap-2.5 rounded-2xl border border-slate-100 p-4 text-sm sm:grid-cols-2">

@@ -166,9 +166,9 @@ export function ProductForm({ product, onSaved }: { product?: Product; onSaved?:
       <div className="card space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 className="font-semibold">Danh sách biến thể ({variants.length})</h2>
-          <div className="flex items-end gap-2 text-sm">
+          <div className="flex flex-wrap items-end gap-2 text-sm">
             <span className="text-gray-500">Áp dụng cho tất cả:</span>
-            <input className="input w-32" placeholder="Giá bán" value={bulk.price} onChange={(e) => setBulk({ ...bulk, price: e.target.value })} />
+            <input className="input w-28 sm:w-32" placeholder="Giá bán" value={bulk.price} onChange={(e) => setBulk({ ...bulk, price: e.target.value })} />
             <input className="input w-24" placeholder="Tồn kho" value={bulk.stock} onChange={(e) => setBulk({ ...bulk, stock: e.target.value })} />
             <button type="button" className="btn-outline" onClick={() => setVariants(variants.map((v) => ({
               ...v, ...(bulk.price !== '' && { price: Number(bulk.price) }), ...(bulk.stock !== '' && { stock: Number(bulk.stock) }),

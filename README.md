@@ -1,6 +1,6 @@
 # 🛒 Tạp Hoá Xanh – Hệ thống quản lý & bán hàng tạp hoá
 
-Dự án full-stack: **NestJS + Prisma + MySQL** (backend) và **Next.js 15 + Tailwind CSS 4** (frontend), gồm **trang khách hàng** và **trang quản trị**. Sản phẩm hỗ trợ **nhiều biến thể** (vd: Khối lượng × Hương vị), mỗi biến thể có SKU, giá và tồn kho riêng.
+Dự án full-stack: **NestJS + Prisma + MySQL** (backend), **Next.js 15 + Tailwind CSS 4** (web khách hàng + quản trị) và **app điện thoại Expo / React Native** dùng chung cho khách hàng & nhân viên. Sản phẩm hỗ trợ **nhiều biến thể** (vd: Khối lượng × Hương vị), mỗi biến thể có SKU, giá và tồn kho riêng.
 
 ```
 grocery-store/
@@ -20,6 +20,7 @@ grocery-store/
 │       ├── inventory/  # Tồn kho, nhập/xuất/điều chỉnh, lịch sử kho
 │       ├── dashboard/  # Thống kê doanh thu, top bán chạy, sắp hết hàng
 │       └── upload/     # Upload ảnh (Vercel Blob hoặc backend/uploads)
+├── mobile/             # App điện thoại Expo (Android / iOS / web) – xem mobile/README.md
 ├── frontend/           # Next.js App Router (cổng 3000)
 │   └── src/app/
 │       ├── (shop)/     # Trang khách hàng
@@ -50,6 +51,18 @@ grocery-store/
 - **Đơn hàng**: lọc theo trạng thái / kênh (Online, Tại quầy) / thanh toán / ngày, luồng trạng thái tự hoàn kho khi huỷ, xác nhận đã nhận tiền, lịch sử giao dịch, **xuất Excel (CSV)**, **in hoá đơn A4 / K80**
 - **Sản phẩm & biến thể** (tự sinh tổ hợp thuộc tính, SKU, mã vạch, giá bán / giá gốc / giá vốn), danh mục, mã giảm giá, **kiểm duyệt đánh giá**, người dùng & phân quyền
 - **Cài đặt cửa hàng**: tên, logo, liên hệ, thông báo; MST, VAT, lời cảm ơn trên hoá đơn; phí ship, đơn tối thiểu, khung giờ giao; bật/tắt phương thức thanh toán, tài khoản ngân hàng (xem trước QR); banner trang chủ; mạng xã hội
+
+### 🆕 Bổ sung
+- **Bán tại quầy – quét liên tục**: camera quét luôn bật ngay trên màn POS, **máy quét USB/Bluetooth nhận ở mọi nơi trên trang** (không cần focus ô nhập), tiếng bíp / âm báo lỗi, nhân số lượng `3*` rồi quét, **nhiều hoá đơn chờ** (lưu khi tải lại trang), phím tắt F2 / F4 / F8 / F9
+- **Báo cáo lợi nhuận**: doanh thu, giá vốn (snapshot giá vốn tại thời điểm bán), lợi nhuận gộp, biên LN theo ngày/tháng, danh mục, phương thức thanh toán, kênh bán, top sản phẩm
+- **Lô sắp hết hạn** (theo số lô & HSD trên phiếu nhập)
+- **Thông báo** trong web/app (chuông) + **push notification** cho app: đơn mới (nhân viên), đổi trạng thái / đã thanh toán (khách)
+- **Quên / đặt lại mật khẩu** qua email (SMTP; chưa cấu hình thì link in ra log API)
+- **Bảo mật**: giới hạn tần suất (đăng nhập 10 lần/phút), Helmet; **tài liệu API Swagger** tại `http://localhost:4000/api/docs`
+- Giao diện kiểm tra tự động ở 360 / 768 / 1024 / 1440px – không tràn ngang
+
+### 📱 App điện thoại (`mobile/`)
+Một app cho cả khách và nhân viên (tab **Quản lý** chỉ hiện với ADMIN/STAFF): mua sắm, thanh toán COD/VietQR/VNPay, đơn hàng, đánh giá, yêu thích, thông báo; POS quét camera liên tục, tra cứu mã, phiếu nhập/xuất/kiểm kê bằng quét, quản lý đơn, báo cáo, in hoá đơn. Chạy: `npm run mobile` (chi tiết trong `mobile/README.md`).
 
 ### 📦 Xuất nhập kho
 - **Phiếu nhập kho** (PN): nhà cung cấp, số HĐ, giá nhập, số lô, hạn dùng → tự tính **giá vốn bình quân gia quyền**
@@ -113,6 +126,8 @@ npm run dev -- --db-port=3307
 npm run dev -- --db-url="mysql://USER:PASS@localhost:3306/grocery"
 ```
 Giá trị được lưu vào `backend/.env`, các lần sau chỉ cần `npm run dev`.
+
+App điện thoại: `npm run mobile` (Expo) hoặc `npm run mobile:web` (chạy trên trình duyệt) – lần đầu cần `cd mobile && npm install`.
 
 Các lệnh khác ở thư mục gốc: `npm run db:reset` (xoá DB & seed lại), `npm run db:studio` (xem dữ liệu bằng Prisma Studio), `npm run build`.
 

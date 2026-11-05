@@ -1,6 +1,8 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/prisma-exception.filter';
@@ -25,11 +27,25 @@ export async function createApp() {
     logger: process.env.VERCEL ? ['error', 'warn'] : undefined,
   });
   app.setGlobalPrefix('api');
+  // Header bảo mật (cho phép frontend khác domain tải ảnh /uploads; tắt CSP vì đây là API JSON + Swagger UI)
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' }, contentSecurityPolicy: false }));
+  app.set('trust proxy', 1);
   app.enableCors({ origin: corsMatcher(), credentials: true });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, transformOptions: { enableImplicitConversion: true } }),
   );
   app.useGlobalFilters(new PrismaExceptionFilter());
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
+  // Tài liệu API: /api/docs (JSON: /api/docs-json)
+  const doc = SwaggerModule.createDocument(
+    app,
+    new DocumentBuilder()
+      .setTitle('Tạp Hoá Xanh API')
+      .setDescription('API cho web cửa hàng, trang quản trị và app điện thoại. Bấm "Authorize" và dán accessToken từ /api/auth/login.')
+      .setVersion('2.0')
+      .addBearerAuth()
+      .build(),
+  );
+  SwaggerModule.setup('api/docs', app, doc, { swaggerOptions: { persistAuthorization: true } });
   return app;
 }

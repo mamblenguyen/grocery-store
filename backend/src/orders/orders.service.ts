@@ -3,6 +3,7 @@ import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { paged, paginate } from '../common/utils';
 import { CouponsService } from '../coupons/coupons.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.module';
 import { SettingsService } from '../settings/settings.service';
 import { CreateOrderDto, PosOrderDto, PreviewOrderDto, QueryOrdersDto } from './dto/order.dto';
 
@@ -24,14 +25,24 @@ export const orderInclude = {
 
 type Line = {
   variantId: number; quantity: number; productId: number; productName: string; variantName: string;
-  sku: string; image: string | null; price: number; total: number; slug: string; stock: number; unit: string | null;
+  sku: string; image: string | null; price: number; costPrice: number | null; total: number; slug: string; stock: number; unit: string | null;
 };
 
 const toItem = ({ slug, stock, unit, ...l }: Line) => l;
 
 @Injectable()
 export class OrdersService {
-  constructor(private prisma: PrismaService, private coupons: CouponsService, private settings: SettingsService) {}
+  constructor(
+    private prisma: PrismaService,
+    private coupons: CouponsService,
+    private settings: SettingsService,
+    private notifications: NotificationsService,
+  ) {}
+
+  /** Gửi thông báo không làm hỏng luồng chính nếu lỗi */
+  private safeNotify(fn: () => Promise<unknown>) {
+    fn().catch(() => {});
+  }
 
   private genCode(prefix = 'DH') {
     const d = new Date();
@@ -54,7 +65,7 @@ export class OrdersService {
       if (v.stock < quantity) throw new BadRequestException(`"${v.product.name} - ${v.name}" chỉ còn ${v.stock} sản phẩm`);
       return {
         variantId, quantity, productId: v.product.id, productName: v.product.name, variantName: v.name,
-        sku: v.sku, image: v.image || v.product.thumbnail, price: v.price, total: v.price * quantity,
+        sku: v.sku, image: v.image || v.product.thumbnail, price: v.price, costPrice: v.costPrice, total: v.price * quantity,
         slug: v.product.slug, stock: v.stock, unit: v.product.unit,
       };
     });
@@ -73,9 +84,9 @@ export class OrdersService {
   }
 
   async preview(dto: PreviewOrderDto) {
-    const { couponId, ...rest } = await this.calculate(dto);
+    const { couponId, lines, ...rest } = await this.calculate(dto);
     const s = await this.settings.get();
-    return { ...rest, freeShippingThreshold: s.freeShippingThreshold, minOrderValue: s.minOrderValue };
+    return { ...rest, lines: lines.map(({ costPrice, ...l }) => l), freeShippingThreshold: s.freeShippingThreshold, minOrderValue: s.minOrderValue };
   }
 
   /** Trừ kho có điều kiện (chống bán vượt tồn khi đặt đồng thời) + ghi log */
@@ -110,7 +121,7 @@ export class OrdersService {
       if (diff < 0 || diff > s.deliveryDaysAhead) throw new BadRequestException(`Chỉ nhận giao trong ${s.deliveryDaysAhead + 1} ngày tới`);
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const order = await this.prisma.$transaction(async (tx) => {
       const calc = await this.calculate(dto, tx);
       if (calc.subtotal < s.minOrderValue)
         throw new BadRequestException(`Đơn hàng tối thiểu ${s.minOrderValue.toLocaleString('vi-VN')}₫`);
@@ -129,6 +140,12 @@ export class OrdersService {
         include: orderInclude,
       });
     });
+    this.safeNotify(() => this.notifications.notifyStaff({
+      type: 'NEW_ORDER', title: `🛒 Đơn hàng mới ${order.code}`,
+      body: `${order.customerName} · ${order.total.toLocaleString('vi-VN')}₫ · ${order.items.length} sản phẩm`,
+      data: { orderId: order.id, url: `/admin/orders/${order.id}` },
+    }));
+    return order;
   }
 
   /** Bán tại quầy: hoàn thành & thanh toán ngay */
@@ -228,7 +245,7 @@ export class OrdersService {
   }
 
   async updateStatus(id: number, status: OrderStatus, actorId: number, cancelReason?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUniqueOrThrow({ where: { id }, include: { items: true } });
       if (!TRANSITIONS[order.status].includes(status))
         throw new BadRequestException(`Không thể chuyển trạng thái từ ${order.status} sang ${status}`);
@@ -262,6 +279,19 @@ export class OrdersService {
       }
       return tx.order.update({ where: { id }, data, include: orderInclude });
     });
+    if (updated.userId && updated.channel === 'ONLINE' && updated.userId !== actorId) {
+      const msg: Record<string, string> = {
+        CONFIRMED: 'đã được xác nhận và đang chuẩn bị hàng',
+        SHIPPING: 'đang được giao đến bạn',
+        COMPLETED: 'đã giao thành công. Cảm ơn bạn đã mua sắm!',
+        CANCELLED: `đã bị huỷ${cancelReason ? `: ${cancelReason}` : ''}`,
+      };
+      this.safeNotify(() => this.notifications.notify([updated.userId!], {
+        type: 'ORDER_STATUS', title: `Đơn hàng ${updated.code}`, body: `Đơn hàng ${updated.code} ${msg[status] ?? status}`,
+        data: { orderId: updated.id, status, url: `/orders/${updated.id}` },
+      }));
+    }
+    return updated;
   }
 
   async cancelMine(id: number, userId: number, reason?: string) {
@@ -273,7 +303,7 @@ export class OrdersService {
 
   async updatePayment(id: number, paymentStatus: PaymentStatus) {
     const order = await this.prisma.order.findUniqueOrThrow({ where: { id } });
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       if (paymentStatus === 'PAID' && order.paymentStatus !== 'PAID')
         await tx.paymentTransaction.create({
           data: {
@@ -287,5 +317,11 @@ export class OrdersService {
         include: orderInclude,
       });
     });
+    if (paymentStatus === 'PAID' && order.paymentStatus !== 'PAID' && order.userId)
+      this.safeNotify(() => this.notifications.notify([order.userId!], {
+        type: 'PAYMENT', title: 'Đã nhận thanh toán', body: `Cửa hàng đã nhận ${order.total.toLocaleString('vi-VN')}₫ cho đơn ${order.code}`,
+        data: { orderId: order.id, url: `/orders/${order.id}` },
+      }));
+    return updated;
   }
 }

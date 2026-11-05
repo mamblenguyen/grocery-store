@@ -29,7 +29,7 @@ function LoginInner() {
         {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
         <div><label className="label">Email</label><input className="input" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
         <div>
-          <label className="label">Mật khẩu</label>
+          <div className="flex items-center justify-between"><label className="label">Mật khẩu</label><Link href="/forgot-password" className="mb-1.5 text-sm font-medium text-brand-700 hover:underline">Quên mật khẩu?</Link></div>
           <div className="relative">
             <input className="input pr-11" type={show ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             <button type="button" onClick={() => setShow(!show)} className="absolute top-1/2 right-3 -translate-y-1/2 text-slate-400">{show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button>

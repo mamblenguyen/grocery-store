@@ -1,6 +1,6 @@
 'use client';
 import {
-  ChevronDown, Grid3x3, Heart, LayoutDashboard, LogOut, MapPin, Menu, Package, Phone, Search, ShoppingCart, User, X,
+  Bell, ChevronDown, Grid3x3, Heart, LayoutDashboard, LogOut, MapPin, Menu, Package, Phone, Search, ShoppingCart, User, X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -9,6 +9,7 @@ import { useAuth } from '@/context/auth';
 import { useCart } from '@/context/cart';
 import { useSettings } from '@/context/settings';
 import { useWishlist } from '@/context/wishlist';
+import { NotificationBell } from '@/components/NotificationBell';
 import { api, imageUrl } from '@/lib/api';
 import { money } from '@/lib/format';
 import type { Category, Paged, Product } from '@/lib/types';
@@ -118,6 +119,7 @@ function UserMenu() {
           <Link href="/orders" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"><Package className="h-4 w-4" /> Đơn hàng của tôi</Link>
           <Link href="/account/addresses" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"><MapPin className="h-4 w-4" /> Sổ địa chỉ</Link>
           <Link href="/account/wishlist" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"><Heart className="h-4 w-4" /> Sản phẩm yêu thích</Link>
+          <Link href="/account/notifications" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"><Bell className="h-4 w-4" /> Thông báo</Link>
           <div className="my-1 border-t border-slate-100" />
           <button onClick={() => { logout(); router.push('/'); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" /> Đăng xuất</button>
         </div>
@@ -162,6 +164,7 @@ export function Header() {
             </a>
           )}
           <UserMenu />
+          <NotificationBell />
           <Link href="/account/wishlist" className="btn-icon btn-ghost relative hidden sm:flex" aria-label="Yêu thích">
             <Heart className="h-[22px] w-[22px]" />
             {wl.ids.size > 0 && <span className="absolute top-0.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{wl.ids.size}</span>}

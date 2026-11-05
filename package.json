@@ -1,7 +1,7 @@
 {
   "name": "grocery-store",
   "private": true,
-  "description": "Quản lý bán hàng tạp hoá – NestJS + Next.js + Prisma + MySQL",
+  "description": "Quản lý bán hàng tạp hoá – NestJS + Next.js + Prisma + MySQL + app Expo",
   "engines": {
     "node": ">=20"
   },
@@ -10,6 +10,8 @@
     "db:up": "docker compose up -d",
     "db:reset": "cd backend && npx prisma migrate reset --force",
     "db:studio": "cd backend && npx prisma studio",
-    "build": "npm --prefix backend run build && npm --prefix frontend run build"
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "mobile": "cd mobile && npx expo start",
+    "mobile:web": "cd mobile && npx expo start --web"
   }
 }

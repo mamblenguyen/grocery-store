@@ -29,6 +29,8 @@
   html { scroll-behavior: smooth; }
   body { @apply bg-slate-50 text-slate-700 antialiased; font-feature-settings: "cv11"; }
   h1, h2, h3, h4 { @apply text-ink; }
+  /* Con của grid mặc định min-width:auto → bảng/dải cuộn ngang bên trong sẽ nới rộng cả trang trên mobile */
+  .grid > * { min-width: 0; }
 }
 
 @utility btn {

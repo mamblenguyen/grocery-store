@@ -59,6 +59,22 @@ export class StockService {
     });
   }
 
+  /** Lô hàng (từ phiếu nhập đã hoàn tất) sắp hết hạn / đã hết hạn mà sản phẩm vẫn còn tồn */
+  async expiring(days = 30) {
+    const until = new Date(Date.now() + days * 86400000);
+    const items = await this.prisma.stockDocumentItem.findMany({
+      where: { expiryDate: { not: null, lte: until }, document: { type: 'IMPORT', status: 'COMPLETED' }, variant: { stock: { gt: 0 } } },
+      orderBy: { expiryDate: 'asc' },
+      take: 200,
+      include: {
+        document: { select: { id: true, code: true, completedAt: true } },
+        variant: { select: { id: true, sku: true, name: true, stock: true, product: { select: { name: true, thumbnail: true, unit: true } } } },
+      },
+    });
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return items.map((i) => ({ ...i, daysLeft: Math.ceil((i.expiryDate!.getTime() - today.getTime()) / 86400000) }));
+  }
+
   byIds(ids: number[]) {
     return this.prisma.productVariant.findMany({
       where: { id: { in: ids } },

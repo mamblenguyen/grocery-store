@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.module';
 import { SettingsService } from '../settings/settings.service';
 import { vnpBuildUrl, vnpDate, vnpVerify, VNP_MESSAGES } from './vnpay';
 
@@ -9,7 +10,7 @@ const RETURN_URL = () => process.env.VNPAY_RETURN_URL || 'http://localhost:3000/
 
 @Injectable()
 export class PaymentsService {
-  constructor(private prisma: PrismaService, private settings: SettingsService) {}
+  constructor(private prisma: PrismaService, private settings: SettingsService, private notifications: NotificationsService) {}
 
   /** Tạo link thanh toán VNPay cho đơn hàng của chính khách */
   async createVnpayUrl(orderId: number, userId: number, ip: string) {
@@ -89,6 +90,12 @@ export class PaymentsService {
           },
         });
     });
+    if (success) {
+      const o = txn.order;
+      const data = { orderId: o.id, url: `/orders/${o.id}` };
+      if (o.userId) this.notifications.notify([o.userId], { type: 'PAYMENT', title: 'Thanh toán thành công', body: `Đơn ${o.code} đã được thanh toán ${o.total.toLocaleString('vi-VN')}₫ qua VNPay`, data }).catch(() => {});
+      this.notifications.notifyStaff({ type: 'PAYMENT', title: `💳 VNPay: ${o.code}`, body: `Đã nhận ${o.total.toLocaleString('vi-VN')}₫`, data: { ...data, url: `/admin/orders/${o.id}` } }).catch(() => {});
+    }
     return { RspCode: '00', Message: 'Confirm Success', orderId: txn.orderId, success } as const;
   }
 

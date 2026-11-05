@@ -12,13 +12,16 @@ import type { Paged } from '@/lib/types';
 
 interface StockRow { id: number; sku: string; name: string; stock: number; lowStockThreshold: number; price: number; costPrice: number | null; productName: string; thumbnail: string | null; isActive: boolean }
 interface Log { id: number; change: number; stockAfter: number; unitCost: number | null; reason: string; note: string | null; createdAt: string; variant: { sku: string; name: string; product: { name: string } }; user: { fullName: string } | null; document: { id: number; code: string } | null }
+interface Expiring { id: number; lotNo: string | null; expiryDate: string; quantity: number; daysLeft: number; document: { id: number; code: string }; variant: { id: number; sku: string; name: string; stock: number; product: { name: string; thumbnail: string | null; unit: string | null } } }
 interface Summary { skus: number; units: number; costValue: number; retailValue: number; lowStock: number; outOfStock: number }
 
 const REASON_CLS: Record<string, string> = { IMPORT: 'bg-emerald-100 text-emerald-800', EXPORT: 'bg-orange-100 text-orange-800', STOCKTAKE: 'bg-sky-100 text-sky-800', ORDER: 'bg-violet-100 text-violet-800', CANCEL: 'bg-slate-200 text-slate-700', ADJUST: 'bg-amber-100 text-amber-800' };
 
 function InventoryInner() {
   const toast = useToast();
-  const [tab, setTab] = useState<'stock' | 'logs'>('stock');
+  const [tab, setTab] = useState<'stock' | 'logs' | 'expiring'>('stock');
+  const [expDays, setExpDays] = useState(30);
+  const [expiring, setExpiring] = useState<Expiring[] | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [filter, setFilter] = useState({ filter: useSearchParams().get('filter') ?? 'all', search: '', page: 1 });
   const [stock, setStock] = useState<Paged<StockRow> | null>(null);
@@ -31,6 +34,7 @@ function InventoryInner() {
   const loadStock = () => api<Paged<StockRow>>('/admin/inventory' + qs({ ...filter, limit: 20 })).then(setStock);
   useEffect(() => { loadSummary(); }, []);
   useEffect(() => { loadStock(); }, [filter]); // eslint-disable-line
+  useEffect(() => { if (tab === 'expiring') { setExpiring(null); api<Expiring[]>(`/admin/stock/expiring?days=${expDays}`).then(setExpiring); } }, [tab, expDays]);
   useEffect(() => { if (tab === 'logs') api<Paged<Log>>('/admin/inventory/logs' + qs({ ...logF, limit: 30 })).then(setLogs); }, [tab, logF]);
 
   const openAdjust = (v: StockRow) => { setAdjusting(v); setAdj({ type: 'SET', qty: v.stock, note: '' }); };
@@ -59,15 +63,42 @@ function InventoryInner() {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-xl bg-white p-1 shadow-soft">
+        <div className="flex overflow-x-auto rounded-xl bg-white p-1 shadow-soft">
           <button className={`rounded-lg px-4 py-2 text-sm font-semibold ${tab === 'stock' ? 'bg-brand-600 text-white' : 'text-slate-600'}`} onClick={() => setTab('stock')}>Tồn kho</button>
-          <button className={`rounded-lg px-4 py-2 text-sm font-semibold ${tab === 'logs' ? 'bg-brand-600 text-white' : 'text-slate-600'}`} onClick={() => setTab('logs')}>Lịch sử xuất nhập</button>
+          <button className={`rounded-lg px-4 py-2 text-sm font-semibold ${tab === 'logs' ? 'bg-brand-600 text-white' : 'text-slate-600'}`} onClick={() => setTab('logs')}>Lịch sử</button>
+          <button className={`rounded-lg px-4 py-2 text-sm font-semibold ${tab === 'expiring' ? 'bg-brand-600 text-white' : 'text-slate-600'}`} onClick={() => setTab('expiring')}>Sắp hết hạn</button>
         </div>
         <Link href="/admin/stock/new?type=IMPORT" className="btn-primary ml-auto"><ArrowDownToLine className="h-4 w-4" /> Nhập kho</Link>
         <Link href="/admin/stock/new?type=STOCKTAKE" className="btn-outline"><ClipboardCheck className="h-4 w-4" /> Kiểm kê</Link>
       </div>
 
-      {tab === 'stock' ? (
+      {tab === 'expiring' ? (
+        <div className="card overflow-x-auto p-0">
+          <div className="flex flex-wrap items-center gap-2 p-4">
+            <span className="text-sm text-slate-500">Hết hạn trong</span>
+            {[7, 15, 30, 60, 90].map((d) => <button key={d} className={`chip ${expDays === d ? 'chip-active' : ''}`} onClick={() => setExpDays(d)}>{d} ngày</button>)}
+            <span className="text-xs text-slate-400">· theo số lô & HSD trên phiếu nhập, chỉ hiện sản phẩm còn tồn</span>
+          </div>
+          {!expiring ? <Spinner /> : !expiring.length ? <Empty text="Không có lô nào sắp hết hạn 🎉" /> : (
+            <table className="table">
+              <thead><tr><th>Sản phẩm</th><th>Lô</th><th>Hạn dùng</th><th className="text-right">Còn</th><th className="text-right">SL nhập lô</th><th className="text-right">Tồn hiện tại</th><th>Phiếu nhập</th><th /></tr></thead>
+              <tbody>
+                {expiring.map((e) => (
+                  <tr key={e.id}>
+                    <td><div className="font-semibold text-ink">{e.variant.product.name}</div><div className="text-xs text-slate-400">{e.variant.name} · <span className="font-mono">{e.variant.sku}</span></div></td>
+                    <td className="font-mono text-xs">{e.lotNo || '—'}</td>
+                    <td>{new Date(e.expiryDate).toLocaleDateString('vi-VN', { timeZone: 'UTC' })}</td>
+                    <td className="text-right"><span className={`badge ${e.daysLeft < 0 ? 'bg-red-600 text-white' : e.daysLeft <= 7 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{e.daysLeft < 0 ? `Quá hạn ${-e.daysLeft} ngày` : `${e.daysLeft} ngày`}</span></td>
+                    <td className="text-right">{e.quantity}</td><td className="text-right font-semibold">{e.variant.stock}</td>
+                    <td><Link href={`/admin/stock/${e.document.id}`} className="link font-mono text-xs">{e.document.code}</Link></td>
+                    <td className="text-right"><Link href="/admin/stock/new?type=EXPORT" className="btn-ghost btn-sm">Xuất huỷ</Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : tab === 'stock' ? (
         <>
           <div className="card grid gap-3 p-4 lg:grid-cols-[1fr_auto]">
             <VariantPicker onPick={pickToAdjust} placeholder="Quét / tìm sản phẩm để điều chỉnh nhanh…" />

@@ -75,17 +75,21 @@ enum StockDocStatus {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  fullName  String
-  phone     String?
-  address   String?  @db.Text
-  role      Role     @default(CUSTOMER)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             Int       @id @default(autoincrement())
+  email          String    @unique
+  password       String
+  fullName       String
+  phone          String?
+  address        String?   @db.Text
+  role           Role      @default(CUSTOMER)
+  isActive       Boolean   @default(true)
+  resetTokenHash String?
+  resetTokenExp  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
+  notifications Notification[]
+  pushTokens    PushToken[]
   orders        Order[]
   createdOrders Order[]         @relation("OrderCreatedBy")
   inventoryLogs InventoryLog[]
@@ -248,6 +252,7 @@ model OrderItem {
   sku         String
   image       String?         @db.VarChar(1000)
   price       Int
+  costPrice   Int? // giá vốn tại thời điểm bán (báo cáo lợi nhuận)
   quantity    Int
   total       Int
 }
@@ -413,4 +418,29 @@ model StockDocumentItem {
   note       String?
 
   @@index([documentId])
+}
+
+model Notification {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // ORDER_STATUS | PAYMENT | NEW_ORDER | SYSTEM
+  title     String
+  body      String    @db.Text
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+/// Expo push token của thiết bị (app điện thoại)
+model PushToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

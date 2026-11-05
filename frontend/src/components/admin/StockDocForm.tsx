@@ -143,7 +143,7 @@ export function StockDocForm({ type, doc, onSaved }: { type: DocType; doc?: Stoc
             {rows.length} mặt hàng · {type === 'STOCKTAKE' ? <>Chênh lệch: <b className="text-ink">{rows.reduce((s, r) => s + r.quantity - r.stock, 0)}</b></> : <>Tổng SL: <b className="text-ink">{totalQty}</b></>}
             {' · '}{type === 'STOCKTAKE' ? 'Giá trị lệch' : type === 'EXPORT' ? 'Giá vốn xuất (ước tính)' : 'Tổng tiền hàng'}: <b className="text-lg text-ink">{money(totalAmount)}</b>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button className="btn-outline" disabled={saving} onClick={() => save(false)}><Save className="h-4 w-4" /> Lưu nháp</button>
             <button className="btn-primary" disabled={saving || overStock.length > 0} onClick={() => save(true)}>Hoàn tất & cập nhật kho</button>
           </div>

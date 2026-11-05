@@ -1,11 +1,12 @@
 'use client';
 import {
   Boxes, Building2, ClipboardList, ExternalLink, FolderTree, LayoutDashboard, LogOut, Menu, MessageSquare, Package,
-  QrCode, ReceiptText, Settings, Store, Ticket, Users, Warehouse, X,
+  BarChart3, QrCode, ReceiptText, Settings, Store, Ticket, Users, Warehouse, X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { NotificationBell } from '@/components/NotificationBell';
 import { Spinner } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 import { useSettings } from '@/context/settings';
@@ -15,6 +16,7 @@ const GROUPS = [
   { title: 'Bán hàng', items: [
     { href: '/admin', label: 'Tổng quan', icon: LayoutDashboard },
     { href: '/admin/pos', label: 'Bán tại quầy (POS)', icon: Store },
+    { href: '/admin/reports', label: 'Báo cáo lợi nhuận', icon: BarChart3 },
     { href: '/admin/orders', label: 'Đơn hàng', icon: ReceiptText },
     { href: '/admin/coupons', label: 'Mã giảm giá', icon: Ticket },
   ] },
@@ -97,9 +99,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <header className="no-print sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur sm:px-6">
           <button className="btn-icon btn-ghost -ml-2 lg:hidden" onClick={() => setMobile(true)}>{mobile ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
           <h1 className="text-base font-bold text-ink">{current?.label ?? 'Quản trị'}</h1>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+            <NotificationBell allHref="/account/notifications" dark />
             <Link href="/admin/pos" className="btn-primary btn-sm hidden sm:inline-flex"><Store className="h-4 w-4" /> Bán hàng</Link>
-            <Link href="/" target="_blank" className="btn-outline btn-sm"><ExternalLink className="h-4 w-4" /> Xem cửa hàng</Link>
+            <Link href="/" target="_blank" className="btn-outline btn-sm"><ExternalLink className="h-4 w-4" /><span className="hidden sm:inline">Xem cửa hàng</span></Link>
           </div>
         </header>
         <main className="p-4 sm:p-6">{children}</main>

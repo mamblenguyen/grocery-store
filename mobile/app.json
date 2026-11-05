@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "Tạp Hoá Xanh",
+    "slug": "tap-hoa-xanh",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "vn.taphoaxanh.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Dùng camera để quét mã vạch / QR sản phẩm"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0a9c4b",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "vn.taphoaxanh.app",
+      "permissions": [
+        "CAMERA",
+        "VIBRATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép Tạp Hoá Xanh dùng camera để quét mã vạch / QR sản phẩm",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0a9c4b"
+        }
+      ],
+      "expo-secure-store",
+      "expo-image",
+      "expo-web-browser",
+      "expo-audio"
+    ],
+    "scheme": "taphoaxanh",
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}

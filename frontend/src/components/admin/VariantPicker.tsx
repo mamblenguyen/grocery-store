@@ -6,6 +6,7 @@ import { api, imageUrl } from '@/lib/api';
 import { money } from '@/lib/format';
 import type { Variant } from '@/lib/types';
 import { BarcodeScanner } from './BarcodeScanner';
+import { beep, useHidScanner } from './scan-utils';
 
 export type PickedVariant = Variant & { product: NonNullable<Variant['product']> };
 
@@ -42,9 +43,11 @@ export function VariantPicker({ onPick, placeholder = 'Tìm tên sản phẩm, S
   const pick = (v: PickedVariant) => { onPick(v); setQ(''); setResults([]); setOpen(false); input.current?.focus(); };
 
   const lookup = async (code: string) => {
-    try { pick(await api<PickedVariant>(`/admin/stock/lookup?code=${encodeURIComponent(code)}`)); }
-    catch (e: any) { toast(e.message, 'error'); }
+    try { pick(await api<PickedVariant>(`/admin/stock/lookup?code=${encodeURIComponent(code)}`)); beep('ok'); }
+    catch (e: any) { beep('error'); toast(e.message, 'error'); }
   };
+  // Máy quét USB/Bluetooth hoạt động cả khi không focus ô tìm kiếm
+  useHidScanner(lookup);
 
   const onKey = async (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, results.length - 1)); }
@@ -54,8 +57,8 @@ export function VariantPicker({ onPick, placeholder = 'Tìm tên sản phẩm, S
       const code = q.trim();
       if (!code) return;
       // Ưu tiên tra mã chính xác (máy quét USB), nếu không có thì chọn kết quả đang chọn
-      try { pick(await api<PickedVariant>(`/admin/stock/lookup?code=${encodeURIComponent(code)}`)); }
-      catch { if (results[hi]) pick(results[hi]); else toast(`Không tìm thấy "${code}"`, 'error'); }
+      try { pick(await api<PickedVariant>(`/admin/stock/lookup?code=${encodeURIComponent(code)}`)); beep('ok'); }
+      catch { if (results[hi]) pick(results[hi]); else { beep('error'); toast(`Không tìm thấy "${code}"`, 'error'); } }
     }
   };
 

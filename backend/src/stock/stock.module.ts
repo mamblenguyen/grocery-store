@@ -21,6 +21,10 @@ export class StockController {
     return this.service.searchVariants(search);
   }
 
+  @Get('expiring') expiring(@Query('days') days?: string) {
+    return this.service.expiring(Math.min(365, Math.max(1, Number(days) || 30)));
+  }
+
   @Get('summary') summary() {
     return this.service.summary();
   }
