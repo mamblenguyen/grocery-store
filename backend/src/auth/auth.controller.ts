@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Auth, CurrentUser } from '../common/decorators';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto, LoginDto, RegisterDto, UpdateProfileDto } from './dto/auth.dto';
@@ -7,10 +8,14 @@ import { ChangePasswordDto, LoginDto, RegisterDto, UpdateProfileDto } from './dt
 export class AuthController {
   constructor(private auth: AuthService) {}
 
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register') register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
   }
 
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login') login(@Body() dto: LoginDto) {
     return this.auth.login(dto);
   }
