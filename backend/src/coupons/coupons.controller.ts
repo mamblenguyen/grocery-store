@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, UseGuards } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { AdminOnly } from '../common/decorators';
 import { SaveCouponDto, ValidateCouponDto } from './coupons.dto';
 import { CouponsService } from './coupons.service';
@@ -7,6 +8,8 @@ import { CouponsService } from './coupons.service';
 export class CouponsController {
   constructor(private service: CouponsService) {}
 
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('validate') async validate(@Body() dto: ValidateCouponDto) {
     const { coupon, discount } = await this.service.apply(dto.code, dto.subtotal);
     return { code: coupon.code, description: coupon.description, discount };
