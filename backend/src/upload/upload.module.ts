@@ -8,6 +8,15 @@ import { AdminOnly } from '../common/decorators';
 
 const UPLOAD_DIR = join(process.cwd(), 'uploads');
 
+/** Đuôi file lấy theo mimetype (không tin tên gốc do người dùng gửi lên) */
+const MIME_EXT: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+const ALLOWED_EXT = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+
 @Controller('admin/upload')
 @AdminOnly()
 export class UploadController {
@@ -23,7 +32,7 @@ export class UploadController {
       // Vercel giới hạn body request 4.5MB
       limits: { fileSize: 4 * 1024 * 1024 },
       fileFilter: (_req, file, cb) =>
-        /^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)
+        MIME_EXT[file.mimetype] && ALLOWED_EXT.includes(extname(file.originalname).toLowerCase())
           ? cb(null, true)
           : cb(new BadRequestException('Chỉ chấp nhận ảnh JPG, PNG, WEBP, GIF'), false),
     }),
@@ -32,7 +41,7 @@ export class UploadController {
     if (!files?.length) throw new BadRequestException('Chưa chọn file');
     const urls: string[] = [];
     for (const f of files) {
-      const name = `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(f.originalname).toLowerCase()}`;
+      const name = `${Date.now()}-${Math.round(Math.random() * 1e9)}${MIME_EXT[f.mimetype]}`;
       if (process.env.BLOB_READ_WRITE_TOKEN) {
         const blob = await put(`products/${name}`, f.buffer, { access: 'public', contentType: f.mimetype });
         urls.push(blob.url);
