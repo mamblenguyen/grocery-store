@@ -44,7 +44,7 @@ function StoreCard({ s }: { s: PublicStore }) {
 }
 
 const FEATURES = [
-  { icon: ShoppingBag, title: 'Website bán hàng riêng', text: 'Mỗi cửa hàng có trang riêng, giỏ hàng, thanh toán COD / VietQR / VNPay.' },
+  { icon: ShoppingBag, title: 'Website bán hàng riêng', text: 'Mỗi cửa hàng có trang riêng, giỏ hàng, thanh toán COD / chuyển khoản VietQR.' },
   { icon: QrCode, title: 'Bán tại quầy quét mã', text: 'POS quét mã vạch / QR bằng máy quét hoặc camera, in hoá đơn K80 ngay.' },
   { icon: Boxes, title: 'Quản lý kho chính xác', text: 'Phiếu nhập / xuất / kiểm kê, giá vốn bình quân, hạn sử dụng, in tem.' },
   { icon: BarChart3, title: 'Báo cáo lợi nhuận', text: 'Doanh thu, giá vốn, lợi nhuận theo ngày, kênh bán, danh mục, sản phẩm.' },

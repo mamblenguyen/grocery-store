@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Save, 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { api, imageUrl } from '@/lib/api';
 import { EXPORT_REASONS, money, STOCK_DOC_TYPE } from '@/lib/format';
 import type { StockDoc, Supplier } from '@/lib/types';
@@ -53,7 +54,11 @@ export function StockDocForm({ type, doc, onSaved }: { type: DocType; doc?: Stoc
   const save = async (complete: boolean) => {
     if (!rows.length) return toast('Chưa có dòng hàng nào', 'error');
     if (type === 'EXPORT' && !info.reason) return toast('Vui lòng chọn lý do xuất kho', 'error');
-    if (complete && !confirm(type === 'STOCKTAKE' ? 'Hoàn tất kiểm kê? Tồn kho sẽ được cập nhật bằng số lượng thực tế.' : `Hoàn tất ${STOCK_DOC_TYPE[type].label.toLowerCase()}? Tồn kho sẽ được cập nhật ngay.`)) return;
+    if (complete && !(await confirmDialog(
+      type === 'STOCKTAKE' ? 'Hoàn tất kiểm kê?' : `Hoàn tất ${STOCK_DOC_TYPE[type].label.toLowerCase()}?`,
+      type === 'STOCKTAKE' ? 'Tồn kho sẽ được cập nhật bằng số lượng thực tế.' : 'Tồn kho sẽ được cập nhật ngay.',
+      'Hoàn tất',
+    ))) return;
     setSaving(true);
     const payload = {
       type, complete,

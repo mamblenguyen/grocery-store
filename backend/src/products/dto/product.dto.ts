@@ -1,8 +1,9 @@
 import { Type } from 'class-transformer';
 import {
-  ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Min, MinLength, ValidateNested,
+  ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Min, MinLength, ValidateIf, ValidateNested,
 } from 'class-validator';
 import { PaginationDto } from '../../common/pagination.dto';
+import { VAT_RATES } from '../../common/vat';
 
 export class ProductOptionDto {
   @IsString() @MinLength(1) name: string;
@@ -35,6 +36,8 @@ export class SaveProductDto {
   @IsOptional() @IsInt() categoryId?: number | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
   @IsOptional() @IsBoolean() isFeatured?: boolean;
+  /** Thuế suất GTGT; null = theo mặc định của cửa hàng */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsIn(VAT_RATES, { message: 'Thuế suất GTGT không hợp lệ' }) vatRate?: string | null;
 
   @IsArray() @ValidateNested({ each: true }) @Type(() => ProductOptionDto)
   options: ProductOptionDto[];
@@ -50,9 +53,11 @@ export class QueryProductsDto extends PaginationDto {
   @IsOptional() @IsInt() @Min(0) minPrice?: number;
   @IsOptional() @IsInt() @Min(0) maxPrice?: number;
   @IsOptional() @IsString() brand?: string;
-  @IsOptional() @IsIn(['newest', 'price_asc', 'price_desc', 'name', 'best_selling']) sort?: string;
+  @IsOptional() @IsIn(['newest', 'price_asc', 'price_desc', 'name', 'best_selling', 'rating']) sort?: string;
   @IsOptional() @IsBoolean() featured?: boolean;
   @IsOptional() @IsBoolean() inStock?: boolean;
+  /** chỉ sản phẩm đang giảm giá (có giá gốc) */
+  @IsOptional() @IsBoolean() deals?: boolean;
   /** chỉ dùng cho admin */
   @IsOptional() @IsIn(['active', 'inactive', 'all']) status?: string;
 }

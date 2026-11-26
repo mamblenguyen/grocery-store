@@ -46,6 +46,7 @@ export function Footer() {
             <li><Link href="/orders" className="hover:text-white">Tra cứu đơn hàng</Link></li>
             <li><Link href="/account" className="hover:text-white">Tài khoản của tôi</Link></li>
             <li><Link href="/account/wishlist" className="hover:text-white">Sản phẩm yêu thích</Link></li>
+            <li><Link href="/partner" className="font-semibold text-white hover:underline">Đăng ký làm đối tác bán hàng</Link></li>
             <li><span>Chính sách đổi trả 7 ngày</span></li>
             <li><span>Giao hàng: {s.freeShippingThreshold ? `miễn phí từ ${s.freeShippingThreshold.toLocaleString('vi-VN')}₫` : 'toàn khu vực'}</span></li>
           </ul>

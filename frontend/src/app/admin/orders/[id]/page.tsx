@@ -4,8 +4,11 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { DeliveryTracker } from '@/components/DeliveryTracker';
+import { AdminEInvoicePanel } from '@/components/EInvoice';
 import { OrderTimeline } from '@/components/OrderTimeline';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
+import { promptDialog } from '@/components/PromptDialog';
 import { PaymentBadge, Spinner, StatusBadge } from '@/components/ui';
 import { api, imageUrl } from '@/lib/api';
 import { dateOnly, dateTime, money, ORDER_STATUS, PAYMENT_METHOD } from '@/lib/format';
@@ -24,20 +27,20 @@ export default function AdminOrderDetail() {
   const liveDelivery = o?.delivery && ['WAITING', 'ASSIGNED', 'PICKED_UP'].includes(o.delivery.status);
   useEffect(() => { if (!liveDelivery) return; const t = setInterval(load, 15000); return () => clearInterval(t); }, [liveDelivery, load]);
   const delivery = async (action: 'request' | 'cancel') => {
-    if (action === 'cancel' && !confirm('Huỷ gọi tài xế cho đơn này?')) return;
+    if (action === 'cancel' && !(await confirmDialog('Huỷ gọi tài xế cho đơn này?', 'Chuyến đang chờ sẽ bị huỷ.', 'Huỷ gọi', true))) return;
     try { setO(await api<Order>(`/admin/orders/${id}/delivery/${action}`, { method: 'POST' })); toast(action === 'request' ? 'Đã gọi tài xế' : 'Đã huỷ gọi tài xế'); }
     catch (e: any) { toast(e.message, 'error'); }
   };
 
   const changeStatus = async (status: string) => {
     let cancelReason: string | undefined;
-    if (status === 'CANCELLED') { const r = prompt('Lý do huỷ đơn (hàng sẽ được hoàn lại kho):'); if (r === null) return; cancelReason = r; }
-    else if (!confirm(`Chuyển đơn sang "${ORDER_STATUS[status].label}"?`)) return;
+    if (status === 'CANCELLED') { const r = await promptDialog({ title: 'Huỷ đơn hàng?', message: 'Hàng sẽ được hoàn lại kho.', label: 'Lý do huỷ', placeholder: 'Nhập lý do huỷ đơn', confirmText: 'Huỷ đơn', destructive: true }); if (r === null) return; cancelReason = r; }
+    else if (!(await confirmDialog('Cập nhật trạng thái đơn?', `Chuyển đơn sang “${ORDER_STATUS[status].label}”.`, 'Cập nhật', status === 'CANCELLED'))) return;
     try { setO(await api<Order>(`/admin/orders/${id}/status`, { method: 'PATCH', json: { status, cancelReason } })); toast('Đã cập nhật trạng thái'); }
     catch (e: any) { toast(e.message, 'error'); }
   };
   const markPaid = async () => {
-    if (!confirm(`Xác nhận đã nhận đủ ${money(o!.total)}?`)) return;
+    if (!(await confirmDialog('Xác nhận thanh toán?', `Đã nhận đủ ${money(o!.total)} từ khách hàng.`, 'Đã nhận tiền'))) return;
     try { setO(await api<Order>(`/admin/orders/${id}/payment`, { method: 'PATCH', json: { paymentStatus: 'PAID' } })); toast('Đã ghi nhận thanh toán'); }
     catch (e: any) { toast(e.message, 'error'); }
   };
@@ -55,7 +58,7 @@ export default function AdminOrderDetail() {
         </div>
         <div className="flex flex-wrap gap-2">
           {NEXT[o.status].map((s) => <button key={s} className={s === 'CANCELLED' ? 'btn-outline text-red-600' : 'btn-primary'} onClick={() => changeStatus(s)}>{s === 'CANCELLED' ? 'Huỷ đơn' : `→ ${ORDER_STATUS[s].label}`}</button>)}
-          <a href={`/print/invoice/${o.id}`} target="_blank" className="btn-outline"><Printer className="h-4 w-4" /> Hoá đơn A4</a>
+          <a href={`/print/invoice/${o.id}`} target="_blank" className="btn-outline"><Printer className="h-4 w-4" /> Phiếu A4</a>
           <a href={`/print/invoice/${o.id}?format=k80`} target="_blank" className="btn-outline"><Printer className="h-4 w-4" /> Bill K80</a>
         </div>
       </div>
@@ -127,6 +130,7 @@ export default function AdminOrderDetail() {
             )}
             <div className="flex gap-2"><StatusBadge status={o.status} /></div>
           </div>
+          <AdminEInvoicePanel order={o} onChange={setO} />
         </div>
       </div>
     </div>

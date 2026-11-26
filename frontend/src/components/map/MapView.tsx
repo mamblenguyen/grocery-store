@@ -4,27 +4,29 @@ import type { Map as LMap, Marker } from 'leaflet';
 import { useEffect, useRef } from 'react';
 import { DEFAULT_CENTER, type LatLng } from '@/lib/geo';
 
-export interface MapPoint extends LatLng { kind: 'store' | 'home' | 'shipper' | 'pin'; label?: string }
+export interface MapPoint extends LatLng { kind: 'store' | 'home' | 'shipper' | 'pin' | 'suggest'; label?: string }
 
 const ICON: Record<MapPoint['kind'], { emoji: string; bg: string }> = {
   store: { emoji: '🏪', bg: '#0a9c4b' },
   home: { emoji: '🏠', bg: '#e11d48' },
   shipper: { emoji: '🛵', bg: '#2563eb' },
   pin: { emoji: '📍', bg: '#e11d48' },
+  suggest: { emoji: '🔎', bg: '#f59e0b' },
 };
 
 /**
  * Bản đồ OpenStreetMap (Leaflet).
  * - points: các điểm cần hiển thị (cửa hàng, khách, tài xế…) – tự căn khung
  * - onPick: cho phép chạm/bấm lên bản đồ để ghim vị trí
+ * - zoom: mức zoom khi chỉ có 1 điểm (mặc định ≥ 15)
  */
-export function MapView({ points, onPick, height = 280, className = '' }: { points: MapPoint[]; onPick?: (p: LatLng) => void; height?: number; className?: string }) {
+export function MapView({ points, onPick, height = 280, className = '', zoom }: { points: MapPoint[]; onPick?: (p: LatLng) => void; height?: number; className?: string; zoom?: number }) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<LMap | null>(null);
   const layer = useRef<Marker[]>([]);
   const pickRef = useRef(onPick);
   pickRef.current = onPick;
-  const key = JSON.stringify(points.map((p) => [p.kind, p.lat, p.lng]));
+  const key = JSON.stringify([zoom, points.map((p) => [p.kind, p.lat, p.lng, p.label])]);
 
   useEffect(() => {
     let alive = true;
@@ -44,11 +46,11 @@ export function MapView({ points, onPick, height = 280, className = '' }: { poin
           html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translateY(-6px)"><div style="width:36px;height:36px;border-radius:999px;background:${ic.bg};display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:0 4px 10px rgba(0,0,0,.25);border:3px solid #fff">${ic.emoji}</div></div>`,
           iconSize: [36, 42], iconAnchor: [18, 40],
         });
-        const mk = L.marker([p.lat, p.lng], { icon }).addTo(m);
+        const mk = L.marker([p.lat, p.lng], { icon, opacity: p.kind === 'suggest' ? 0.85 : 1, interactive: p.kind !== 'suggest' /* chạm xuyên qua để ghim */ }).addTo(m);
         if (p.label) mk.bindTooltip(p.label, { direction: 'top', offset: [0, -36] });
         return mk;
       });
-      if (points.length === 1) m.setView([points[0].lat, points[0].lng], Math.max(m.getZoom(), 15));
+      if (points.length === 1) m.setView([points[0].lat, points[0].lng], zoom ?? Math.max(m.getZoom(), 15));
       else if (points.length > 1) m.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])), { padding: [40, 40], maxZoom: 16 });
       setTimeout(() => m.invalidateSize(), 100);
     });

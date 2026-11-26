@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Linking, ScrollView, Text, View } from 'react-native';
+import { AddressFields } from '@/components/AddressPicker';
 import { toast } from '@/components/Toast';
 import { Button, Card, Chip, Divider, Input, Loading, Row, StatusPill, T } from '@/components/ui';
 import { useAuth } from '@/context/auth';
@@ -12,6 +13,7 @@ import { money } from '@/lib/format';
 import { BUSINESS_TYPES, expiryInfo, STORE_STATUS, type SuperStoreDetail } from '@/lib/super';
 import { C } from '@/lib/theme';
 import type { Plan, StoreStatus } from '@/lib/types';
+import { type AddressParts, isComplete, toParts, toPayload } from '@/lib/vn-address';
 
 const METHODS = ['Chuyển khoản', 'Tiền mặt', 'Ví điện tử', 'Miễn phí / khuyến mãi'];
 
@@ -23,6 +25,7 @@ export default function SuperStoreScreen() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [renew, setRenew] = useState({ months: 1, planId: 0, amount: '', method: METHODS[0] });
   const [busy, setBusy] = useState(false);
+  const [addr, setAddr] = useState<AddressParts | null>(null);
 
   const load = useCallback(() => api<SuperStoreDetail>(`/super/stores/${id}`).then((d) => { setS(d); setRenew((r) => ({ ...r, planId: r.planId || d.planId || 0 })); }).catch((e) => toast(e.message, 'error')), [id]);
   useEffect(() => { load(); api<Plan[]>('/super/plans').then(setPlans).catch(() => {}); }, [load]);
@@ -47,7 +50,13 @@ export default function SuperStoreScreen() {
       toast('Đã gia hạn & ghi phiếu thu');
     } catch (err: any) { toast(err.message, 'error'); } finally { setBusy(false); }
   };
-  const actAs = () => { setActing({ id: s.id, slug: s.slug, name: s.name }); router.replace('/manage'); };
+  const saveAddr = async () => {
+    if (!addr) return;
+    setBusy(true);
+    try { setS(await api(`/super/stores/${s.id}`, { method: 'PATCH', json: { addressParts: toPayload(addr) } })); setAddr(null); toast('Đã lưu địa chỉ cửa hàng'); }
+    catch (err: any) { toast(err.message, 'error'); } finally { setBusy(false); }
+  };
+  const actAs = () => { setActing({ id: s.id, slug: s.slug, name: s.name }); router.replace('/admin'); };
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 760, width: '100%', alignSelf: 'center' }}>
@@ -55,7 +64,17 @@ export default function SuperStoreScreen() {
       <Card style={{ gap: 8 }}>
         <Row style={{ justifyContent: 'space-between' }}><T variant="h2" style={{ flex: 1 }}>{s.name}</T><StatusPill map={STORE_STATUS} value={s.status} /></Row>
         <T variant="muted">/s/{s.slug}</T>
-        {!!s.address && <T>📍 {s.address}</T>}
+        {!!s.address && <T>📍 {s.address}{s.provinceCode == null ? ' (chưa có Tỉnh/Huyện/Xã)' : ''}</T>}
+        {!addr && <Button testID="edit-address" title={s.address ? 'Sửa địa chỉ cửa hàng' : 'Thêm địa chỉ cửa hàng'} icon="location-outline" variant="outline" size="sm" onPress={() => setAddr(toParts(s))} />}
+        {addr && (
+          <View style={{ gap: 10, marginTop: 6 }}>
+            <AddressFields label="Địa chỉ cửa hàng" testID="sd-addr" value={addr} onChange={setAddr} />
+            <Row gap={8}>
+              <Button title="Huỷ" variant="outline" size="sm" onPress={() => setAddr(null)} />
+              <Button testID="save-address" title="Lưu địa chỉ" icon="checkmark" size="sm" loading={busy} disabled={!isComplete(addr)} onPress={saveAddr} />
+            </Row>
+          </View>
+        )}
         {!!s.phone && <Text onPress={() => Linking.openURL(`tel:${s.phone}`)} style={{ color: C.brand700, fontWeight: '600' }}>📞 {s.phone}</Text>}
         {owner && <T>👤 Chủ: {owner.fullName} · {owner.email}</T>}
         <Row gap={8} style={{ flexWrap: 'wrap', marginTop: 4 }}>

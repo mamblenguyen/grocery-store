@@ -10,10 +10,12 @@ import { SettingsProvider } from '@/context/settings';
 import { StoreProvider } from '@/context/store';
 import { WishlistProvider } from '@/context/wishlist';
 import { C } from '@/lib/theme';
+import { ConfirmDialogProvider } from '@/components/ConfirmDialog';
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
+      <ConfirmDialogProvider>
       <StoreProvider>
       <SettingsProvider>
         <AuthProvider>
@@ -32,6 +34,7 @@ export default function RootLayout() {
                   }}
                 >
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="admin" options={{ headerShown: false, animation: 'fade' }} />
                   <Stack.Screen name="login" options={{ title: 'Đăng nhập', presentation: 'modal' }} />
                   <Stack.Screen name="register" options={{ title: 'Tạo tài khoản', presentation: 'modal' }} />
                   <Stack.Screen name="forgot-password" options={{ title: 'Quên mật khẩu', presentation: 'modal' }} />
@@ -45,6 +48,7 @@ export default function RootLayout() {
         </AuthProvider>
       </SettingsProvider>
       </StoreProvider>
+      </ConfirmDialogProvider>
     </SafeAreaProvider>
   );
 }

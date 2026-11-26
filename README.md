@@ -49,10 +49,12 @@ grocery-store/
 | **Tài xế** (`shipper@grocery.local`) | web `/shipper` (tối ưu điện thoại) · app tab **Nhận đơn** | Bật/tắt nhận đơn, xem đơn gần nhất (khoảng cách tới cửa hàng, thời gian ước tính, thu nhập, tiền thu hộ), nhận đơn, **chỉ đường Google Maps**, gọi cửa hàng/khách, xác nhận lấy hàng / giao, trả đơn, lịch sử & thu nhập hôm nay. Vị trí GPS được gửi tự động mỗi 15 giây khi đang trực tuyến / đang giao |
 | **Khách** | Trang đơn hàng (web + app) | Thấy tài xế (tên, biển số, nút gọi), tiến trình 4 bước, **bản đồ vị trí tài xế trực tiếp** (tự làm mới 10 giây) |
 | **Cửa hàng** | `/admin/orders/<id>` · Cài đặt → **Vị trí cửa hàng** | Theo dõi chuyến, gọi lại / huỷ gọi tài xế; ghim vị trí cửa hàng (điểm lấy hàng) |
-| **Super Admin** | `/super/shippers` | Thêm tài xế (phương tiện, biển số, CCCD, khu vực), khoá / mở, đặt lại mật khẩu, thống kê chuyến & thu nhập, giám sát mọi chuyến giao |
+| **Super Admin** | `/super/shippers` | Thêm / sửa tài xế (phương tiện, biển số, CCCD, **vùng hoạt động**), khoá / mở, đặt lại mật khẩu, thống kê chuyến & thu nhập, giám sát mọi chuyến giao |
 
 - Thu nhập tài xế = phí ship của đơn (tối thiểu `SHIPPER_MIN_FEE`, mặc định 15.000₫ – sàn bù khi cửa hàng miễn phí ship). `SHIPPER_MAX_ACTIVE` (mặc định 3) = số đơn tối đa một tài xế giao cùng lúc.
 - Bảo mật: tài xế chỉ thấy SĐT/tên đầy đủ của khách **sau khi nhận đơn**; khách chỉ thấy tài xế của đơn mình.
+- **Vùng hoạt động** (Tỉnh/TP → Quận/Huyện → Phường/Xã, chọn nhiều vùng; mỗi vùng là cả tỉnh, cả huyện hoặc một xã): tài xế chỉ thấy & nhận thông báo đơn có **cửa hàng nằm trong vùng** (có nút xem “Tất cả đơn”). Chưa chọn vùng = mọi nơi. Tài xế tự đổi vùng ở `/shipper` / app, hoặc super admin đặt hộ.
+- **Địa chỉ bắt buộc đủ Tỉnh/TP – Quận/Huyện – Phường/Xã + số nhà, đường**: địa chỉ cửa hàng, địa chỉ đăng ký kinh doanh của đối tác, **sổ địa chỉ & địa chỉ giao hàng của khách** khi đặt đơn (web + app). Địa chỉ đã lưu kiểu cũ được nhắc chọn lại khi thanh toán và tự cập nhật vào sổ địa chỉ. Danh mục 63 tỉnh / 696 huyện / 10.051 xã có sẵn trong backend (`src/geo`, API công khai `/api/geo/provinces`, `/api/geo/provinces/:code/districts`, `/api/geo/districts/:code/wards`). Cửa hàng cũ chỉ có địa chỉ dạng chữ vẫn hoạt động (coi như trong mọi vùng) – nên cập nhật lại tại *Cài đặt → Cửa hàng* hoặc trang đối tác của super admin.
 - Bản đồ: OpenStreetMap + Leaflet (miễn phí, không cần API key). Production nhiều lượt truy cập nên dùng nhà cung cấp tile riêng (MapTiler, Mapbox…) theo chính sách của OSM.
 
 ## 🌐 Super Admin quản lý dữ liệu mọi đối tác
@@ -72,7 +74,7 @@ Super Admin vào `/admin` (hoặc menu **Đơn hàng & sản phẩm (tất cả)
   - Thử ở máy: `NEXT_PUBLIC_ROOT_DOMAIN=lvh.me:3000` (mọi `*.lvh.me` trỏ về 127.0.0.1) rồi mở http://lvh.me:3000 và http://tap-hoa-xanh.lvh.me:3000; nhớ thêm `http://lvh.me:3000,http://*.lvh.me:3000` vào `CORS_ORIGIN` của backend.
   - Giỏ hàng lưu theo trình duyệt & tên miền: hàng thêm trên subdomain nằm ở giỏ của subdomain đó.
 - App: trang chủ là sàn (hàng của mọi cửa hàng), giỏ hàng chung chia theo cửa hàng, quét QR (kể cả link subdomain) để vào cửa hàng.
-- Ảnh minh hoạ sản phẩm mẫu (`frontend/public/products`) dùng đồ hoạ Twemoji © Twitter/X – CC-BY 4.0; ảnh thật do cửa hàng tự tải lên. DB cũ dùng ảnh ngẫu nhiên sẽ tự được thay khi chạy `npm run dev`.
+- Ảnh sản phẩm mẫu là **ảnh chụp thật** (`frontend/public/products/real`, nguồn Open Food Facts / Open Products Facts / Wikimedia Commons – giấy phép từng ảnh trong `real/CREDITS.txt`); ảnh danh mục dùng đồ hoạ Twemoji © Twitter/X – CC-BY 4.0. DB cũ còn ảnh demo (ngẫu nhiên/SVG) sẽ tự được thay bằng ảnh thật khi chạy `npm run dev`.
 
 ## 🏢 Nền tảng đa cửa hàng
 
@@ -198,11 +200,15 @@ Các lệnh khác ở thư mục gốc: `npm run db:reset` (xoá DB & seed lại
 | Chủ cửa hàng *Tạp Hoá Xanh* (gói Chuyên nghiệp, 12 tháng) | admin@grocery.local | /admin |
 | Nhân viên *Tạp Hoá Xanh* | staff@grocery.local | /admin |
 | Chủ cửa hàng *Tạp Hoá Bà Năm* (gói Cơ bản, 1 tháng) | owner2@grocery.local | /admin |
+| Chủ / nhân viên *Tạp Hoá Bà Bảy* (gói Cơ bản, ~70 mặt hàng) | owner3@grocery.local · staff3@grocery.local | /admin |
 | Khách hàng | customer@grocery.local | / (trang sàn) |
 | **Tài xế giao hàng** | shipper@grocery.local | /shipper · app tab "Nhận đơn" |
 
-Cửa hàng mẫu: http://localhost:3000/s/tap-hoa-xanh và http://localhost:3000/s/tap-hoa-ba-nam.
-Mã giảm giá mẫu: Tạp Hoá Xanh `WELCOME10` (giảm 10%, tối đa 50k, đơn từ 100k), `GIAM20K` (giảm 20k, đơn từ 200k); Bà Năm `BANAM5K`.
+Cửa hàng mẫu: http://localhost:3000/s/tap-hoa-xanh, http://localhost:3000/s/tap-hoa-ba-nam và http://localhost:3000/s/tap-hoa-ba-bay.
+Mã giảm giá mẫu: Tạp Hoá Xanh `WELCOME10` (giảm 10%, tối đa 50k, đơn từ 100k), `GIAM20K` (giảm 20k, đơn từ 200k); Bà Năm `BANAM5K`; Bà Bảy `WELCOME10`, `BABAY10`, `BABAY15K`.
+Phí ship khác nhau theo cửa hàng: Bà Năm 15k (freeship từ 150k), Bà Bảy 18k (freeship từ 200k).
+
+DB đã có dữ liệu mà có cửa hàng slug `tap-hoa-ba-bay` (tạo từ /super) còn trống hàng → `npm run dev` / `npx prisma db seed` tự điền ~70 mặt hàng mẫu, NCC và mã giảm giá (không đụng thông tin cửa hàng, tài khoản, cài đặt).
 
 ## 📡 API chính
 

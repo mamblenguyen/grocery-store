@@ -1,3 +1,5 @@
+import type { ServiceArea } from './vn-address';
+
 export interface Job {
   id: number; status: string; fee: number; codAmount: number; distanceKm: number | null;
   pickupAddress: string; pickupLat: number | null; pickupLng: number | null;
@@ -5,6 +7,8 @@ export interface Job {
   shipperLat?: number | null; shipperLng?: number | null; failReason?: string | null;
   assignedAt?: string | null; pickedUpAt?: string | null; deliveredAt?: string | null; createdAt: string;
   toPickupKm?: number | null; etaPickupMin?: number | null; itemCount: number;
+  /** Cửa hàng nằm trong vùng hoạt động của tài xế */
+  inArea?: boolean;
   store: { id: number; name: string; slug: string; phone: string | null; address: string | null; lat: number | null; lng: number | null };
   order: {
     id: number; code: string; customerName: string; phone: string; address: string; note: string | null; total: number;
@@ -15,6 +19,20 @@ export interface Job {
 
 export interface ShipperMe {
   id: number; fullName: string; email: string; phone: string | null;
-  profile: { vehicleType: string; plateNumber: string | null; area: string | null; isOnline: boolean; lat: number | null; lng: number | null };
-  stats: { todayTrips: number; todayEarnings: number; todayCod: number; active: number; totalTrips: number; totalEarnings: number };
+  profile: { vehicleType: string; plateNumber: string | null; area: string | null; areas: ServiceArea[] | null; isOnline: boolean; lat: number | null; lng: number | null };
+  stats: {
+    todayTrips: number; todayEarnings: number; todayCod: number; active: number; totalTrips: number; totalEarnings: number;
+    /** phí ship đã nhận từ cửa hàng (đơn trả trước) / tiền phải nộp lại cửa hàng (đơn COD) trong ngày */
+    todayFromStores: number; todayToStores: number;
+  };
+}
+
+/**
+ * Thanh toán trực tiếp tài xế ↔ cửa hàng (khớp backend delivery-core.settlement):
+ * - Đơn trả trước: cửa hàng trả phí ship cho tài xế khi giao hàng cho tài xế.
+ * - Đơn COD: tài xế thu khách, giữ phí ship, nộp phần còn lại cho cửa hàng.
+ */
+export function settlement(d: { fee: number; codAmount: number }) {
+  const net = d.codAmount - d.fee;
+  return { collect: d.codAmount, storePaysShipper: net < 0 ? -net : 0, shipperPaysStore: net > 0 ? net : 0 };
 }

@@ -1,7 +1,7 @@
 'use client';
 import {
   Boxes, Building2, ClipboardList, ExternalLink, FolderTree, LayoutDashboard, LogOut, Menu, MessageSquare, Package,
-  AlertTriangle, BarChart3, BadgeCheck, Contact, QrCode, ReceiptText, Settings, ShieldCheck, Store, Ticket, Users, Warehouse, X,
+  AlertTriangle, BarChart3, BadgeCheck, Contact, QrCode, ReceiptText, Settings, ShieldCheck, Store, Ticket, Users, Warehouse, X, HeartHandshake,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -23,6 +23,7 @@ const GROUPS = [
     { href: '/admin/orders', label: 'Đơn hàng', icon: ReceiptText },
     { href: '/admin/coupons', label: 'Mã giảm giá', icon: Ticket },
     { href: '/admin/customers', label: 'Khách hàng', icon: Contact },
+    { href: '/admin/operations', label: 'Vận hành & tăng trưởng', icon: HeartHandshake },
   ] },
   { title: 'Hàng hoá', items: [
     { href: '/admin/products', label: 'Sản phẩm', icon: Package },
@@ -73,7 +74,7 @@ function Banners() {
 }
 
 /** Trang cần một cửa hàng cụ thể (bán hàng, tạo/sửa, cài đặt…) */
-const NEED_STORE = [/^\/admin\/pos/, /^\/admin\/products\/(new|\d+)/, /^\/admin\/categories/, /^\/admin\/coupons/, /^\/admin\/stock\/new/, /^\/admin\/suppliers/, /^\/admin\/labels/, /^\/admin\/staff/, /^\/admin\/settings/, /^\/admin\/subscription/];
+const NEED_STORE = [/^\/admin\/pos/, /^\/admin\/products\/(new|\d+)/, /^\/admin\/categories/, /^\/admin\/coupons/, /^\/admin\/operations/, /^\/admin\/stock\/new/, /^\/admin\/suppliers/, /^\/admin\/labels/, /^\/admin\/staff/, /^\/admin\/settings/, /^\/admin\/subscription/];
 
 interface StoreOpt { id: number; slug: string; name: string; status: string }
 function useStoreOptions() {

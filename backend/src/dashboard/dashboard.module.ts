@@ -2,6 +2,7 @@ import { Controller, Get, Injectable, Module, Query } from '@nestjs/common';
 import { AdminOnly } from '../common/decorators';
 import { scope } from '../common/tenant';
 import { PrismaService } from '../prisma/prisma.service';
+import { vnDayKey, vnToday } from '../common/vn-time';
 
 @Injectable()
 export class DashboardService {
@@ -9,11 +10,9 @@ export class DashboardService {
 
   async overview(days = 7) {
     const sc = scope();
-    const since = new Date();
-    since.setHours(0, 0, 0, 0);
-    since.setDate(since.getDate() - (days - 1));
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+    // Mốc ngày theo giờ Việt Nam (server chạy UTC)
+    const since = vnToday(days - 1);
+    const startOfToday = vnToday();
 
     const [revenue, todayRevenue, orderCount, todayOrders, customers, products, byStatus, recent, topProducts, lowStock, recentOrders] =
       await Promise.all([
@@ -27,7 +26,7 @@ export class DashboardService {
         this.prisma.order.groupBy({ by: ['status'], where: { ...sc }, _count: { _all: true } }),
         this.prisma.order.findMany({
           where: { ...sc, createdAt: { gte: since } },
-          select: { total: true, status: true, createdAt: true },
+          select: { total: true, subtotal: true, discount: true, shippingFee: true, status: true, createdAt: true },
         }),
         this.prisma.orderItem.groupBy({
           by: ['productId', 'productName'],
@@ -45,21 +44,28 @@ export class DashboardService {
         this.prisma.order.findMany({ where: { ...sc }, orderBy: { createdAt: 'desc' }, take: 8, include: { store: { select: { id: true, name: true } } } }),
       ]);
 
-    // Gom doanh thu theo ngày (giờ địa phương của server), lấp đủ các ngày không có đơn
-    const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const buckets = new Map<string, { revenue: number; orders: number }>();
+    // Gom theo ngày (giờ VN), lấp đủ các ngày không có đơn.
+    // revenue = tổng tiền đơn KHÔNG huỷ (gồm phí ship, đã trừ giảm giá) – cùng cách tính với "Doanh thu hôm nay"
+    type Bucket = { revenue: number; goods: number; shipping: number; discount: number; orders: number; cancelled: number; completed: number };
+    const empty = (): Bucket => ({ revenue: 0, goods: 0, shipping: 0, discount: 0, orders: 0, cancelled: 0, completed: 0 });
+    const buckets = new Map<string, Bucket>();
     for (const o of recent) {
-      const k = dayKey(o.createdAt);
-      const b = buckets.get(k) ?? { revenue: 0, orders: 0 };
-      b.orders += 1;
-      if (o.status !== 'CANCELLED') b.revenue += o.total;
+      const k = vnDayKey(o.createdAt);
+      const b = buckets.get(k) ?? empty();
+      if (o.status === 'CANCELLED') b.cancelled += 1;
+      else {
+        b.orders += 1;
+        b.revenue += o.total;
+        b.goods += o.subtotal - o.discount;
+        b.shipping += o.shippingFee;
+        b.discount += o.discount;
+        if (o.status === 'COMPLETED') b.completed += 1;
+      }
       buckets.set(k, b);
     }
     const chart = Array.from({ length: days }, (_, i) => {
-      const d = new Date(since);
-      d.setDate(since.getDate() + i);
-      const k = dayKey(d);
-      return { date: k, ...(buckets.get(k) ?? { revenue: 0, orders: 0 }) };
+      const k = vnDayKey(new Date(since.getTime() + i * 86_400_000));
+      return { date: k, ...(buckets.get(k) ?? empty()) };
     });
 
     return {

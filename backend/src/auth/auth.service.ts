@@ -45,7 +45,7 @@ export class AuthService {
   async me(id: number) {
     const u = await this.prisma.user.findUniqueOrThrow({
       where: { id },
-      include: { store: { include: { plan: { select: { id: true, name: true, maxProducts: true, maxStaff: true } } } } },
+      include: { store: { include: { plan: { select: { id: true, name: true, maxProducts: true, maxStaff: true, features: true, maxOrdersMonthly: true, maxCampaignsMonthly: true, auditRetentionDays: true } } } } },
     });
     const { store, ...rest } = u;
     return {

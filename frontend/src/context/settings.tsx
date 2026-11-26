@@ -6,8 +6,9 @@ import { PLATFORM_NAME, PLATFORM_SLOGAN } from '@/lib/platform';
 
 export const FALLBACK_SETTINGS: StoreSettings = {
   storeName: PLATFORM_NAME, slogan: PLATFORM_SLOGAN, logo: '', hotline: '', email: '', address: '',
-  openingHours: '', announcement: '', taxCode: '', vatRate: 0, invoiceFooter: '',
-  shippingFee: 20000, freeShippingThreshold: 300000, minOrderValue: 0, deliverySlots: [], deliveryDaysAhead: 3,
+  openingHours: '', announcement: '', taxCode: '', invoiceFooter: '',
+  tax: { method: 'TRUC_TIEP', defaultVatRate: '8' }, einvoice: { enabled: false, provider: '', templateCode: '2', series: '', lookupUrl: '' },
+  shippingMode: 'DISTANCE', shippingFee: 20000, freeShippingThreshold: 300000, minOrderValue: 0, deliverySlots: [], deliveryDaysAhead: 3,
   payment: { cod: true, bankTransfer: false, vnpay: false },
   bank: { bankBin: '', bankName: '', accountNo: '', accountName: '' },
   banners: [], social: { facebook: '', zalo: '', tiktok: '', youtube: '' },

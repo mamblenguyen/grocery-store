@@ -6,12 +6,13 @@ export interface StoreRef { id: number; slug: string; name: string }
 export interface Plan {
   id: number; code: string; name: string; description?: string | null; priceMonthly: number;
   maxProducts: number | null; maxStaff: number | null; isActive: boolean; sortOrder: number; _count?: { stores: number };
+  features: string[]; maxOrdersMonthly: number | null; maxCampaignsMonthly: number | null; auditRetentionDays: number | null;
 }
 
 /** Cửa hàng của tài khoản quản trị (trả về trong /auth/me) */
 export interface MyStore extends StoreRef {
   status: StoreStatus; logo?: string | null; planExpiresAt: string | null; daysLeft: number | null;
-  plan: { id: number; name: string; maxProducts: number | null; maxStaff: number | null } | null;
+  plan: { id: number; name: string; maxProducts: number | null; maxStaff: number | null; features: string[]; maxOrdersMonthly: number | null; maxCampaignsMonthly: number | null; auditRetentionDays: number | null } | null;
 }
 
 /** Cửa hàng trong danh bạ công khai */
@@ -47,11 +48,28 @@ export interface Product {
   category?: { id: number; name: string; slug: string } | null;
   options?: ProductOption[]; variants: Variant[]; totalStock?: number; related?: Product[]; updatedAt?: string;
   store?: StoreRef;
+  /** Thuế suất GTGT: '0' | '5' | '8' | '10' | 'KCT' | 'KKKNT'; null = mặc định cửa hàng */
+  vatRate?: string | null;
 }
 
 export interface OrderItem {
   id: number; variantId?: number | null; productId?: number | null; productName: string; variantName: string;
   sku: string; image?: string | null; price: number; quantity: number; total: number;
+  /** Thuế suất GTGT tại thời điểm bán */
+  vatRate?: string | null; unit?: string | null;
+}
+
+export type EInvoiceStatus = 'REQUESTED' | 'ISSUED' | 'CANCELLED';
+export interface EInvoice {
+  id: number; status: EInvoiceStatus; buyerType: 'CA_NHAN' | 'TO_CHUC'; buyerName: string; buyerCompany?: string | null;
+  buyerTaxCode?: string | null; buyerIdNumber?: string | null; buyerAddress?: string | null; buyerEmail?: string | null;
+  templateCode?: string | null; series?: string | null; number?: string | null; taxAuthorityCode?: string | null;
+  lookupCode?: string | null; lookupUrl?: string | null; provider?: string | null; issuedAt?: string | null; note?: string | null;
+  createdAt: string; updatedAt: string;
+}
+export interface EInvoiceRequest {
+  buyerType: 'CA_NHAN' | 'TO_CHUC'; buyerName: string; buyerCompany?: string; buyerTaxCode?: string; buyerIdNumber?: string;
+  buyerAddress?: string; buyerEmail?: string;
 }
 
 export interface PaymentTransaction {
@@ -65,11 +83,13 @@ export interface Order {
   shippingFee: number; total: number; couponCode?: string | null; cancelReason?: string | null;
   channel: 'ONLINE' | 'POS'; deliveryDate?: string | null; deliverySlot?: string | null; paidAt?: string | null;
   cashReceived?: number | null;
+  loyaltyPointsUsed?: number; loyaltyDiscount?: number;
   createdAt: string; updatedAt: string; items?: OrderItem[]; payments?: PaymentTransaction[];
   user?: { id: number; email: string; fullName?: string } | null; createdBy?: { id: number; fullName: string } | null;
   _count?: { items: number }; storeId?: number; store?: StoreRef;
   dropoffLat?: number | null; dropoffLng?: number | null;
   delivery?: Delivery | null;
+  einvoice?: EInvoice | null;
 }
 
 export interface Delivery {
@@ -86,13 +106,20 @@ export interface Coupon {
   id: number; code: string; description?: string | null; type: 'PERCENT' | 'FIXED'; value: number;
   minOrderValue: number; maxDiscount?: number | null; usageLimit?: number | null; usedCount: number;
   startsAt?: string | null; endsAt?: string | null; isActive: boolean;
+  audienceAll: boolean;
+  recipients?: { userId: number; user?: { id: number; fullName: string; email: string; phone?: string | null } }[];
 }
 
 export interface Banner { image: string; title?: string; subtitle?: string; buttonText?: string; link?: string }
 
 export interface StoreSettings {
   storeName: string; slogan: string; logo: string; hotline: string; email: string; address: string;
-  openingHours: string; announcement: string; taxCode: string; vatRate: number; invoiceFooter: string;
+  openingHours: string; announcement: string; taxCode: string; invoiceFooter: string;
+  /** KHAU_TRU: HĐ GTGT (mẫu 1) · TRUC_TIEP: HĐ bán hàng (mẫu 2) · MIEN: HKD dưới ngưỡng chịu thuế */
+  tax: { method: 'KHAU_TRU' | 'TRUC_TIEP' | 'MIEN'; defaultVatRate: string };
+  einvoice: { enabled: boolean; provider: string; templateCode: string; series: string; lookupUrl: string };
+  /** DISTANCE = theo km (biểu phí của sàn) · FIXED = phí cố định */
+  shippingMode: 'DISTANCE' | 'FIXED';
   shippingFee: number; freeShippingThreshold: number; minOrderValue: number;
   deliverySlots: string[]; deliveryDaysAhead: number;
   payment: { cod: boolean; bankTransfer: boolean; vnpay: boolean };
@@ -111,6 +138,8 @@ export interface Review {
 export interface Address {
   id: number; label?: string | null; fullName: string; phone: string; address: string; isDefault: boolean;
   lat?: number | null; lng?: number | null;
+  street?: string | null; provinceCode?: number | null; provinceName?: string | null; districtCode?: number | null; districtName?: string | null;
+  wardCode?: number | null; wardName?: string | null;
 }
 
 export interface Supplier {

@@ -1,5 +1,5 @@
 'use client';
-import { Bell, Heart, LogOut, MapPin, Package, User } from 'lucide-react';
+import { Bell, Heart, LogOut, MapPin, Package, RotateCcw, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -9,6 +9,7 @@ import { useAuth } from '@/context/auth';
 const MENU = [
   { href: '/account', label: 'Thông tin tài khoản', icon: User },
   { href: '/orders', label: 'Đơn hàng của tôi', icon: Package },
+  { href: '/account/returns', label: 'Đổi trả & khiếu nại', icon: RotateCcw },
   { href: '/account/addresses', label: 'Sổ địa chỉ', icon: MapPin },
   { href: '/account/wishlist', label: 'Sản phẩm yêu thích', icon: Heart },
   { href: '/account/notifications', label: 'Thông báo', icon: Bell },

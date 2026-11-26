@@ -1,7 +1,7 @@
 'use client';
 import { useStoreHref } from '@/context/store';
 import {
-  Bell, ChevronDown, Grid3x3, ShieldCheck, Store, Heart, LayoutDashboard, LogOut, MapPin, Menu, Package, Phone, Search, ShoppingCart, User, X,
+  Bell, ChevronDown, Grid3x3, ShieldCheck, Store, Heart, LayoutDashboard, LogOut, MapPin, Menu, Package, Phone, QrCode, Search, ShoppingCart, User, X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -103,6 +103,7 @@ function SearchBox({ onDone }: { onDone?: () => void }) {
 export function UserMenu() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const sh = useStoreHref();
   if (!user)
     return (
       <Link href="/login" className="hidden items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-slate-100 md:flex">
@@ -121,6 +122,7 @@ export function UserMenu() {
           {user.role === 'SHIPPER' && <Link href="/shipper" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"><Package className="h-4 w-4" /> Nhận đơn giao hàng</Link>}
           {user.role === 'SUPER_ADMIN' && <Link href="/super" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"><ShieldCheck className="h-4 w-4" /> Quản trị nền tảng</Link>}
           {(user.role === 'ADMIN' || user.role === 'STAFF') && <Link href="/admin" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"><LayoutDashboard className="h-4 w-4" /> Quản trị {user.store?.name ?? 'cửa hàng'}</Link>}
+          {user.role === 'CUSTOMER' && <Link href={sh('/member')} className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"><QrCode className="h-4 w-4" /> Mã thành viên tại quầy</Link>}
           <Link href="/account" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"><User className="h-4 w-4" /> Thông tin tài khoản</Link>
           <Link href="/orders" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"><Package className="h-4 w-4" /> Đơn hàng của tôi</Link>
           <Link href="/account/addresses" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"><MapPin className="h-4 w-4" /> Sổ địa chỉ</Link>

@@ -8,7 +8,7 @@ export const PLATFORM_SLOGAN = process.env.NEXT_PUBLIC_PLATFORM_SLOGAN || 'Sàn 
 export const ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
 
 /** Đường dẫn hệ thống: trên subdomain sẽ chuyển về tên miền gốc */
-export const PLATFORM_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/account', '/orders', '/payment', '/admin', '/super', '/print', '/stores'];
+export const PLATFORM_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/account', '/orders', '/payment', '/admin', '/super', '/print', '/stores', '/partner'];
 
 const proto = () => (typeof window !== 'undefined' ? window.location.protocol : ROOT_DOMAIN.includes('lvh.me') || ROOT_DOMAIN.includes('localhost') ? 'http:' : 'https:');
 

@@ -123,6 +123,7 @@ export default function OrderDetail() {
         <Button title="Mua lại" icon="refresh-outline" variant="outline" onPress={reorder} style={{ flex: 1, minWidth: 140 }} />
         <Button title="In hoá đơn" icon="print-outline" variant="outline" onPress={() => printInvoice(o, settings, 'a4')} style={{ flex: 1, minWidth: 140 }} />
       </Row>
+      {o.status === 'COMPLETED' && <Button title="Đổi trả / khiếu nại" icon="return-down-back-outline" variant="outline" onPress={() => router.push(`/account/returns?orderId=${o.id}`)} />}
       {o.status === 'COMPLETED' && o.items?.[0]?.productId && <T variant="muted" style={{ textAlign: 'center' }}>Hãy đánh giá sản phẩm trong trang chi tiết sản phẩm nhé ⭐</T>}
       {o.status === 'PENDING' && o.paymentStatus !== 'PAID' && <Button title="Huỷ đơn hàng" variant="ghost" onPress={cancel} style={{ alignSelf: 'center' }} />}
     </ScrollView>

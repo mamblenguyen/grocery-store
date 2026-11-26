@@ -3,6 +3,7 @@ import { Search } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
+import { promptDialog } from '@/components/PromptDialog';
 import { Empty, Pagination, Spinner } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 import { api, qs } from '@/lib/api';
@@ -50,7 +51,7 @@ export default function PlatformUsersPage() {
                   <td className="text-xs">{date(u.createdAt)}</td>
                   <td><span className={`badge ${u.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'}`}>{u.isActive ? 'Hoạt động' : 'Đã khoá'}</span></td>
                   <td className="space-x-1 text-right whitespace-nowrap">
-                    <button className="btn-outline btn-sm" onClick={() => { const p = prompt(`Mật khẩu mới cho ${u.email} (≥ 6 ký tự)`); if (p) update(u, { password: p }, 'Đã đặt lại mật khẩu'); }}>Đổi MK</button>
+                    <button className="btn-outline btn-sm" onClick={async () => { const p = await promptDialog({ title: `Đặt lại mật khẩu`, message: u.email, label: 'Mật khẩu mới', type: 'password', minLength: 6, confirmText: 'Đổi mật khẩu' }); if (p) update(u, { password: p }, 'Đã đặt lại mật khẩu'); }}>Đổi MK</button>
                     {u.id !== me?.id && <button className={u.isActive ? 'btn-danger btn-sm' : 'btn-primary btn-sm'} onClick={() => update(u, { isActive: !u.isActive }, u.isActive ? 'Đã khoá' : 'Đã mở khoá')}>{u.isActive ? 'Khoá' : 'Mở khoá'}</button>}
                   </td>
                 </tr>

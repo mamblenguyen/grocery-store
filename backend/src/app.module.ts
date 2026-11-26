@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { MailModule } from './mail/mail.service';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -25,6 +25,12 @@ import { SuperModule } from './super/super.module';
 import { StoresModule } from './stores/stores.module';
 import { MarketModule } from './market/market.module';
 import { DeliveryModule } from './delivery/delivery.module';
+import { GeoModule } from './geo/geo.module';
+import { OperationsModule } from './operations/operations.module';
+import { PartnersModule } from './partners/partners.module';
+import { BillingModule } from './billing/billing.module';
+import { PlatformModule } from './common/platform';
+import { AuditInterceptor } from './operations/audit.interceptor';
 
 @Module({
   imports: [
@@ -53,8 +59,16 @@ import { DeliveryModule } from './delivery/delivery.module';
     StoresModule,
     MarketModule,
     DeliveryModule,
+    GeoModule,
+    OperationsModule,
+    PlatformModule,
+    PartnersModule,
+    BillingModule,
   ],
   controllers: [HealthController],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
+  ],
 })
 export class AppModule {}

@@ -8,6 +8,7 @@ export interface MyStore extends StoreRef {
 export interface PublicStore extends StoreRef {
   logo?: string | null; address?: string | null; hotline?: string | null; slogan?: string; openingHours?: string;
   banner?: string | null; productCount: number; acceptingOrders: boolean;
+  lat?: number | null; lng?: number | null; distanceKm?: number; etaMin?: number;
 }
 export interface Plan {
   id: number; code: string; name: string; description?: string | null; priceMonthly: number;
@@ -46,6 +47,7 @@ export interface Product {
 export interface OrderItem {
   id: number; variantId?: number | null; productId?: number | null; productName: string; variantName: string;
   sku: string; image?: string | null; price: number; quantity: number; total: number;
+  vatRate?: string | null; unit?: string | null;
 }
 
 export interface PaymentTransaction {
@@ -85,7 +87,10 @@ export interface Banner { image: string; title?: string; subtitle?: string; butt
 
 export interface StoreSettings {
   storeName: string; slogan: string; logo: string; hotline: string; email: string; address: string;
-  openingHours: string; announcement: string; taxCode: string; vatRate: number; invoiceFooter: string;
+  openingHours: string; announcement: string; taxCode: string; invoiceFooter: string;
+  tax?: { method: 'KHAU_TRU' | 'TRUC_TIEP' | 'MIEN'; defaultVatRate: string };
+  /** DISTANCE = theo km (biểu phí của sàn) · FIXED = phí cố định */
+  shippingMode: 'DISTANCE' | 'FIXED';
   shippingFee: number; freeShippingThreshold: number; minOrderValue: number;
   deliverySlots: string[]; deliveryDaysAhead: number;
   payment: { cod: boolean; bankTransfer: boolean; vnpay: boolean };
@@ -104,6 +109,8 @@ export interface Review {
 export interface Address {
   id: number; label?: string | null; fullName: string; phone: string; address: string; isDefault: boolean;
   lat?: number | null; lng?: number | null;
+  street?: string | null; provinceCode?: number | null; provinceName?: string | null; districtCode?: number | null; districtName?: string | null;
+  wardCode?: number | null; wardName?: string | null;
 }
 
 export interface Supplier {

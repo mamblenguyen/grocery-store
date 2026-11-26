@@ -7,9 +7,29 @@ import type { Order, StoreSettings } from './types';
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const PAY: Record<string, string> = { PAID: 'ĐÃ THANH TOÁN', UNPAID: 'CHƯA THANH TOÁN', REFUNDED: 'ĐÃ HOÀN TIỀN' };
 
-/** HTML hoá đơn – khổ K80 (máy in nhiệt) hoặc A4 */
+/**
+ * Thuế GTGT theo từng thuế suất – chỉ khi cửa hàng nộp thuế theo phương pháp khấu trừ
+ * (HKD / phương pháp trực tiếp: hoá đơn bán hàng không ghi thuế suất). Đồng bộ với frontend/src/lib/vat.ts.
+ */
+function vatRows(o: Order, s: StoreSettings) {
+  if (s.tax?.method !== 'KHAU_TRU' || !o.items?.length) return [];
+  const goods = o.subtotal - o.discount;
+  const m = new Map<string, number>();
+  let allocated = 0;
+  o.items.forEach((it, i) => {
+    const share = i === o.items!.length - 1 ? goods - allocated : o.subtotal ? Math.round((it.total / o.subtotal) * goods) : 0;
+    allocated += share;
+    const rate = it.vatRate ?? s.tax!.defaultVatRate;
+    const r = /^\d+$/.test(rate) ? Number(rate) : 0;
+    const vat = r ? share - Math.round((share * 100) / (100 + r)) : 0;
+    m.set(rate, (m.get(rate) ?? 0) + vat);
+  });
+  return [...m.entries()].filter(([, v]) => v > 0);
+}
+
+/** HTML phiếu thanh toán (không phải hoá đơn) – khổ K80 (máy in nhiệt) hoặc A4 */
 export function invoiceHtml(o: Order, s: StoreSettings, format: 'k80' | 'a4' = 'k80') {
-  const vat = s.vatRate ? Math.round(o.total - (o.total * 100) / (100 + s.vatRate)) : 0;
+  const vats = vatRows(o, s);
   const d = new Date(o.createdAt).toLocaleString('vi-VN');
   const rows = (o.items ?? []).map((i, idx) => format === 'k80'
     ? `<div>${esc(i.productName)}${i.variantName !== 'Mặc định' ? ` (${esc(i.variantName)})` : ''}</div><div class="r"><span>${i.quantity} x ${i.price.toLocaleString('vi-VN')}</span><span>${i.total.toLocaleString('vi-VN')}</span></div>`
@@ -20,7 +40,7 @@ export function invoiceHtml(o: Order, s: StoreSettings, format: 'k80' | 'a4' = '
     o.discount ? line('Giảm giá', '-' + money(o.discount)) : '',
     o.shippingFee ? line('Phí giao hàng', money(o.shippingFee)) : '',
     line('TỔNG CỘNG', money(o.total), true),
-    vat ? line(`(Đã gồm VAT ${s.vatRate}%)`, money(vat)) : '',
+    ...vats.map(([r, v]) => line(`(Gồm thuế GTGT ${/^\d+$/.test(r) ? r + '%' : r})`, money(v))),
     o.cashReceived != null ? line('Khách đưa', money(o.cashReceived)) + line('Tiền thối', money(o.cashReceived - o.total), true) : '',
   ].join('');
   const head = `<div class="c"><h2>${esc(s.storeName)}</h2>${s.address ? `<div>${esc(s.address)}</div>` : ''}${s.hotline ? `<div>ĐT: ${esc(s.hotline)}</div>` : ''}${s.taxCode ? `<div>MST: ${esc(s.taxCode)}</div>` : ''}</div>`;
@@ -28,8 +48,8 @@ export function invoiceHtml(o: Order, s: StoreSettings, format: 'k80' | 'a4' = '
     ? `@page{size:80mm auto;margin:0}body{width:72mm;margin:0 auto;padding:4mm 0;font:12px monospace}h2{margin:0 0 2px;font-size:15px}.c{text-align:center}.r{display:flex;justify-content:space-between}.b{font-weight:bold;font-size:14px}hr{border:0;border-top:1px dashed #000;margin:6px 0}`
     : `@page{size:A4;margin:14mm}body{font:13px sans-serif}h2{margin:0;font-size:18px}.c{text-align:center}.r{display:flex;justify-content:space-between;max-width:320px;margin-left:auto}.b{font-weight:bold;font-size:15px}table{width:100%;border-collapse:collapse;margin:10px 0}td,th{border:1px solid #000;padding:5px}.n{text-align:right}hr{border:0;border-top:1px solid #000}`;
   const body = format === 'k80'
-    ? `${head}<hr/><div class="c b">HOÁ ĐƠN BÁN LẺ</div><div>Số: ${o.code}</div><div>${d}</div><div>KH: ${esc(o.customerName)}${o.phone ? ' - ' + esc(o.phone) : ''}</div><hr/>${rows}<hr/>${totals}<div>TT: ${PAYMENT_METHOD[o.paymentMethod] ?? o.paymentMethod} – ${PAY[o.paymentStatus]}</div><hr/><div class="c">${esc(s.invoiceFooter || 'Cảm ơn quý khách!')}</div>`
-    : `${head}<hr/><h2 class="c" style="margin-top:12px">HOÁ ĐƠN BÁN HÀNG</h2><div class="c">Số: <b>${o.code}</b> · ${d}</div><p>Khách hàng: <b>${esc(o.customerName)}</b> · ${esc(o.phone)}<br/>Địa chỉ: ${esc(o.address)}<br/>Thanh toán: ${PAYMENT_METHOD[o.paymentMethod] ?? o.paymentMethod} – <b>${PAY[o.paymentStatus]}</b></p><table><tr><th>STT</th><th>Tên hàng</th><th>Mã</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th></tr>${rows}</table>${totals}<p>Bằng chữ: <i><b>${numberToVietnameseWords(o.total)}.</b></i></p><p class="c"><i>${esc(s.invoiceFooter)}</i></p>`;
+    ? `${head}<hr/><div class="c b">PHIẾU TÍNH TIỀN</div><div>Số: ${o.code}</div><div>${d}</div><div>KH: ${esc(o.customerName)}${o.phone ? ' - ' + esc(o.phone) : ''}</div><hr/>${rows}<hr/>${totals}<div>TT: ${PAYMENT_METHOD[o.paymentMethod] ?? o.paymentMethod} – ${PAY[o.paymentStatus]}</div><hr/><div class="c">${esc(s.invoiceFooter || 'Cảm ơn quý khách!')}</div><div class="c" style="font-size:10px">Phiếu tính tiền – không phải hoá đơn</div>`
+    : `${head}<hr/><h2 class="c" style="margin-top:12px">PHIẾU THANH TOÁN</h2><div class="c">Số: <b>${o.code}</b> · ${d}</div><p>Khách hàng: <b>${esc(o.customerName)}</b> · ${esc(o.phone)}<br/>Địa chỉ: ${esc(o.address)}<br/>Thanh toán: ${PAYMENT_METHOD[o.paymentMethod] ?? o.paymentMethod} – <b>${PAY[o.paymentStatus]}</b></p><table><tr><th>STT</th><th>Tên hàng</th><th>Mã</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th></tr>${rows}</table>${totals}<p>Bằng chữ: <i><b>${numberToVietnameseWords(o.total)}.</b></i></p><p class="c"><i>${esc(s.invoiceFooter)}</i></p><p class="c" style="font-size:10px">Phiếu thanh toán – không phải hoá đơn. Hoá đơn điện tử (nếu có) do cửa hàng phát hành riêng.</p>`;
   return `<!doctype html><html><head><meta charset="utf-8"/><style>${css}</style></head><body>${body}</body></html>`;
 }
 

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 import { money } from '@/lib/format';
 import { DELIVERY_STATUS } from '@/lib/geo';
-import type { Job } from '@/lib/shipper';
+import { type Job, settlement } from '@/lib/shipper';
 import { C, R } from '@/lib/theme';
 import { Card, Row, StatusPill, T } from './ui';
 
@@ -11,7 +11,7 @@ export function JobCard({ j, children }: { j: Job; children?: React.ReactNode })
   return (
     <Card style={{ gap: 10 }}>
       <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <View><Text style={{ fontSize: 20, fontWeight: '900', color: C.brand700 }}>+{money(j.fee)}</Text><T variant="muted" style={{ fontSize: 12 }}>{j.order.code} · {j.itemCount} món{j.distanceKm != null ? ` · ${j.distanceKm} km` : ''}</T></View>
+        <View><Text style={{ fontSize: 20, fontWeight: '900', color: C.brand700 }}>+{money(j.fee)}{j.status === 'WAITING' && j.inArea === false ? <Text style={{ fontSize: 12, color: C.amber }}>  · Ngoài vùng</Text> : null}</Text><T variant="muted" style={{ fontSize: 12 }}>{j.order.code} · {j.itemCount} món{j.distanceKm != null ? ` · ${j.distanceKm} km` : ''}</T></View>
         {j.status === 'WAITING'
           ? j.toPickupKm != null && <View style={st.pill}><Text style={{ color: C.sky, fontSize: 12, fontWeight: '700' }}>📍 {j.toPickupKm} km · ~{j.etaPickupMin}′</Text></View>
           : <StatusPill map={DELIVERY_STATUS} value={j.status} />}
@@ -23,7 +23,9 @@ export function JobCard({ j, children }: { j: Job; children?: React.ReactNode })
       <Row gap={6} style={{ flexWrap: 'wrap' }}>
         {j.codAmount > 0
           ? <View style={[st.tag, { backgroundColor: C.amber50 }]}><Text style={{ color: '#92400e', fontWeight: '700', fontSize: 12 }}>💵 Thu hộ {money(j.codAmount)}</Text></View>
-          : <View style={[st.tag, { backgroundColor: C.brand50 }]}><Text style={{ color: C.brand700, fontWeight: '700', fontSize: 12 }}>Đã thanh toán</Text></View>}
+          : <View style={[st.tag, { backgroundColor: C.brand50 }]}><Text style={{ color: C.brand700, fontWeight: '700', fontSize: 12 }}>Khách đã thanh toán</Text></View>}
+        {settlement(j).storePaysShipper > 0 && <View style={[st.tag, { backgroundColor: C.sky50 }]}><Text style={{ color: C.sky, fontWeight: '700', fontSize: 12 }}>🏪 Cửa hàng trả bạn {money(settlement(j).storePaysShipper)}</Text></View>}
+        {settlement(j).shipperPaysStore > 0 && <View style={[st.tag, { backgroundColor: '#fff1f2' }]}><Text style={{ color: '#be123c', fontWeight: '700', fontSize: 12 }}>↩ Nộp cửa hàng {money(settlement(j).shipperPaysStore)}</Text></View>}
         {!!j.order.deliverySlot && <View style={[st.tag, { backgroundColor: C.line2 }]}><Text style={{ color: C.text, fontSize: 12 }}>🕒 {j.order.deliverySlot}</Text></View>}
       </Row>
       {children}

@@ -5,12 +5,14 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 import { parseStoreCode, useStore } from '@/context/store';
 import { PLATFORM_NAME } from '@/context/settings';
 import { api, imageUrl, qs } from '@/lib/api';
+import { currentPosition } from '@/lib/geo';
 import { useGrid } from '@/lib/layout';
 import { C, R, shadow } from '@/lib/theme';
 import type { Paged, PublicStore } from '@/lib/types';
 import { Scanner } from './Scanner';
 import { toast } from './Toast';
 import { Empty, Row } from './ui';
+import { StoreMap } from './StoreMap';
 
 /** Danh bạ cửa hàng của nền tảng: tìm kiếm hoặc quét mã QR dán tại quầy */
 export function StorePicker({ onPicked, header }: { onPicked?: (s: PublicStore) => void; header?: React.ReactNode }) {
@@ -20,6 +22,10 @@ export function StorePicker({ onPicked, header }: { onPicked?: (s: PublicStore) 
   const [list, setList] = useState<PublicStore[] | null>(null);
   const [scan, setScan] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [mode, setMode] = useState<'list' | 'map'>('list');
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [nearby, setNearby] = useState(false);
 
   const load = useCallback(async (search = q) => {
     try { setList((await api<Paged<PublicStore>>('/stores' + qs({ search, limit: 50 }), { store: null })).items); }
@@ -28,6 +34,20 @@ export function StorePicker({ onPicked, header }: { onPicked?: (s: PublicStore) 
   useEffect(() => { const t = setTimeout(() => load(q), 250); return () => clearTimeout(t); }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pick = (s: PublicStore) => { select(s); onPicked?.(s); };
+  const findNearby = async () => {
+    setLocating(true);
+    try {
+      const position = await currentPosition();
+      const result = await api<{ items: PublicStore[] }>('/stores/nearby' + qs({ ...position, radius: 15, limit: 50 }), { store: null });
+      setUserLocation(position);
+      setList(result.items);
+      setNearby(true);
+      setMode('map');
+      if (!result.items.length) toast('Không tìm thấy cửa hàng trong bán kính 15 km');
+    } catch (e: any) { toast(e.message, 'error'); }
+    finally { setLocating(false); }
+  };
+  const showAll = () => { setNearby(false); setUserLocation(null); setQ(''); load(''); };
   const onScan = async (code: string) => {
     const slug = parseStoreCode(code);
     if (!slug) return toast('Mã QR không phải mã cửa hàng', 'error');
@@ -41,7 +61,7 @@ export function StorePicker({ onPicked, header }: { onPicked?: (s: PublicStore) 
       <FlatList
         key={cols}
         numColumns={cols}
-        data={list ?? []}
+        data={mode === 'list' ? (list ?? []) : []}
         keyExtractor={(s) => String(s.id)}
         columnWrapperStyle={cols > 1 ? { gap: 12 } : undefined}
         contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 1100, width: '100%', alignSelf: 'center' }}
@@ -58,6 +78,20 @@ export function StorePicker({ onPicked, header }: { onPicked?: (s: PublicStore) 
                 <Ionicons name="qr-code-outline" size={22} color="#fff" />
               </Pressable>
             </Row>
+            <Row gap={8}>
+              <Pressable onPress={() => setMode('list')} style={[st.modeBtn, mode === 'list' && st.modeActive]}>
+                <Ionicons name="list" size={17} color={mode === 'list' ? '#fff' : C.brand700} /><Text style={[st.modeText, mode === 'list' && { color: '#fff' }]}>Danh sách</Text>
+              </Pressable>
+              <Pressable onPress={() => setMode('map')} style={[st.modeBtn, mode === 'map' && st.modeActive]}>
+                <Ionicons name="map-outline" size={17} color={mode === 'map' ? '#fff' : C.brand700} /><Text style={[st.modeText, mode === 'map' && { color: '#fff' }]}>Bản đồ</Text>
+              </Pressable>
+              <Pressable testID="stores-near-me" disabled={locating} onPress={findNearby} style={[st.nearBtn, locating && { opacity: 0.6 }]}>
+                {locating ? <ActivityIndicator size="small" color={C.brand700} /> : <Ionicons name="navigate" size={17} color={C.brand700} />}
+                <Text style={st.modeText}>Gần tôi</Text>
+              </Pressable>
+            </Row>
+            {nearby && <Row style={st.nearInfo}><Text style={{ flex: 1, color: C.brand800, fontSize: 12, fontWeight: '600' }}>Cửa hàng gần bạn trong bán kính 15 km</Text><Pressable onPress={showAll}><Text style={{ color: C.brand700, fontWeight: '800', fontSize: 12 }}>Xem tất cả</Text></Pressable></Row>}
+            {mode === 'map' && list && <StoreMap stores={list} userLocation={userLocation} onPick={pick} />}
             {list === null && <ActivityIndicator color={C.brand600} style={{ marginTop: 30 }} />}
           </View>
         }
@@ -102,6 +136,11 @@ export function PlatformIntro() {
 const st = StyleSheet.create({
   search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: R.md, borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, backgroundColor: C.white },
   scanBtn: { width: 46, height: 46, borderRadius: R.md, backgroundColor: C.brand600, alignItems: 'center', justifyContent: 'center' },
+  modeBtn: { height: 40, paddingHorizontal: 13, borderRadius: R.full, borderWidth: 1, borderColor: C.brand200, backgroundColor: C.white, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  modeActive: { backgroundColor: C.brand700, borderColor: C.brand700 },
+  modeText: { color: C.brand700, fontSize: 12, fontWeight: '700' },
+  nearBtn: { marginLeft: 'auto', height: 40, paddingHorizontal: 13, borderRadius: R.full, backgroundColor: C.brand50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  nearInfo: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: R.md, backgroundColor: C.brand50 },
   card: { backgroundColor: C.white, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: C.line2 },
   cover: { height: 90, backgroundColor: C.brand600 },
   paused: { position: 'absolute', top: 8, right: 8, backgroundColor: C.amber50, paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.full },

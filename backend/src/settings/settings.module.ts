@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import { IsNumber, IsOptional, Max, Min, ValidateIf } from 'class-validator';
 import { Body, Controller, Get, Global, Module, Put } from '@nestjs/common';
 import { AdminOnly, StoreOwner } from '../common/decorators';
+import { AddressPartsDto } from '../geo/vn-address';
 import { SettingsService } from './settings.service';
 import { StoreSettings } from './settings.types';
 
@@ -31,6 +32,11 @@ export class AdminSettingsController {
   /** Cập nhật một phần cài đặt (body là object con của StoreSettings) */
   @StoreOwner() @Put('location') location(@Body() body: LocationDto) {
     return this.settings.setLocation(body.lat ?? null, body.lng ?? null);
+  }
+
+  /** Địa chỉ cửa hàng: số nhà/đường + Tỉnh/TP + Quận/Huyện + Phường/Xã */
+  @StoreOwner() @Put('address') address(@Body() body: AddressPartsDto) {
+    return this.settings.setAddress(body);
   }
 
   @StoreOwner() @Put() update(@Body() body: Partial<StoreSettings>) {

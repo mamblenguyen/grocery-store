@@ -11,7 +11,9 @@ class MarketQuery extends PaginationDto {
   /** slug danh mục – gộp các danh mục cùng slug của mọi cửa hàng */
   @IsOptional() @IsString() category?: string;
   @IsOptional() @IsString() store?: string;
-  @IsOptional() @IsIn(['newest', 'best_selling', 'price_asc', 'price_desc', 'rating']) sort?: string;
+  @IsOptional() @IsIn(['newest', 'best_selling', 'price_asc', 'price_desc', 'rating', 'name']) sort?: string;
+  @IsOptional() @IsString() brand?: string;
+  @IsOptional() @IsIn(['true', 'false', true, false]) inStock?: string | boolean;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) minPrice?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) maxPrice?: number;
   @IsOptional() @IsIn(['true', 'false', true, false]) featured?: string | boolean;
@@ -26,8 +28,8 @@ const liveStore = (): Prisma.StoreWhereInput => ({ status: 'ACTIVE', OR: [{ plan
 export class MarketController {
   constructor(private prisma: PrismaService) {}
 
-  @Get('products') async products(@Query() q: MarketQuery) {
-    const { skip, take, page, limit } = paginate(q.page, q.limit);
+  /** Điều kiện lọc dùng chung cho danh sách sản phẩm & danh sách thương hiệu */
+  private where(q: MarketQuery, withBrand = true): Prisma.ProductWhereInput {
     const where: Prisma.ProductWhereInput = {
       isActive: true,
       store: { ...liveStore(), ...(q.store && { slug: q.store }) },
@@ -36,10 +38,19 @@ export class MarketController {
       ...(q.category && { category: { OR: [{ slug: q.category }, { parent: { slug: q.category } }] } }),
       ...((q.minPrice !== undefined || q.maxPrice !== undefined) && { minPrice: { ...(q.minPrice !== undefined && { gte: q.minPrice }), ...(q.maxPrice !== undefined && { lte: q.maxPrice }) } }),
       ...(String(q.featured) === 'true' && { isFeatured: true }),
+      ...(withBrand && q.brand && { brand: q.brand }),
     };
-    if (String(q.deals) === 'true') where.variants = { some: { isActive: true, compareAtPrice: { not: null } } };
+    const deals = String(q.deals) === 'true', inStock = String(q.inStock) === 'true';
+    if (deals || inStock)
+      where.variants = { some: { isActive: true, ...(deals && { compareAtPrice: { not: null } }), ...(inStock && { stock: { gt: 0 } }) } };
+    return where;
+  }
+
+  @Get('products') async products(@Query() q: MarketQuery) {
+    const { skip, take, page, limit } = paginate(q.page, q.limit);
+    const where = this.where(q);
     const orderBy: Prisma.ProductOrderByWithRelationInput[] =
-      q.sort === 'price_asc' ? [{ minPrice: 'asc' }] : q.sort === 'price_desc' ? [{ minPrice: 'desc' }]
+      q.sort === 'price_asc' ? [{ minPrice: 'asc' }] : q.sort === 'price_desc' ? [{ minPrice: 'desc' }] : q.sort === 'name' ? [{ name: 'asc' }]
         : q.sort === 'best_selling' ? [{ soldCount: 'desc' }] : q.sort === 'rating' ? [{ ratingAvg: 'desc' }, { ratingCount: 'desc' }] : [{ createdAt: 'desc' }];
     const [items, total] = await Promise.all([
       this.prisma.product.findMany({
@@ -53,6 +64,15 @@ export class MarketController {
       this.prisma.product.count({ where }),
     ]);
     return paged(items.map((p) => ({ ...p, images: toImages(p.images), totalStock: p.variants.reduce((s, v) => s + v.stock, 0) })), total, page, limit);
+  }
+
+  /** Thương hiệu có trên sàn – theo các bộ lọc đang chọn (trừ chính thương hiệu), kèm số sản phẩm */
+  @Get('brands') async brands(@Query() q: MarketQuery) {
+    const rows = await this.prisma.product.groupBy({
+      by: ['brand'], where: { ...this.where(q, false), brand: { not: null } }, _count: { _all: true },
+      orderBy: { _count: { brand: 'desc' } }, take: 40,
+    });
+    return rows.filter((r) => r.brand).map((r) => ({ name: r.brand!, count: r._count._all })).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
   }
 
   /** Danh mục gộp theo slug trên toàn sàn (VD: "do-uong" của mọi cửa hàng) */

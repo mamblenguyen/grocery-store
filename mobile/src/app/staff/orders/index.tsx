@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, ScrollView, Text, TextInput, View } from 'react-native';
 import { Badge, Card, Chip, Empty, Loading, Row, StatusPill, T } from '@/components/ui';
 import { api, qs } from '@/lib/api';
@@ -13,6 +13,7 @@ export default function StaffOrders() {
   useStaffGuard();
   const params = useLocalSearchParams<{ status?: string }>();
   const [status, setStatus] = useState(params.status ?? '');
+  useEffect(() => { if (params.status !== undefined) { setStatus(params.status); setData(null); } }, [params.status]);
   const [search, setSearch] = useState('');
   const [data, setData] = useState<Order[] | null>(null);
   const [page, setPage] = useState(1);

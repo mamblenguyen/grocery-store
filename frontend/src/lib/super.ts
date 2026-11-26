@@ -1,4 +1,5 @@
 import type { Plan, StoreStatus } from './types';
+import { type AddressParts, EMPTY_ADDRESS } from './vn-address';
 
 export const STORE_STATUS: Record<StoreStatus, { label: string; cls: string }> = {
   ACTIVE: { label: 'Đang hoạt động', cls: 'bg-green-100 text-green-800' },
@@ -14,14 +15,21 @@ export interface PartnerInfo {
   representative?: string | null; representativeId?: string | null; representativePhone?: string | null;
   bankName?: string | null; bankAccountNo?: string | null; bankAccountName?: string | null;
   contractNo?: string | null; contractSignedAt?: string | null;
+  /** Địa chỉ đăng ký kinh doanh theo Tỉnh/Huyện/Xã (businessAddress = chuỗi ghép) */
+  businessAddressParts?: AddressParts | null;
 }
-export const EMPTY_PARTNER: Required<{ [K in keyof PartnerInfo]: string }> = {
-  businessName: '', businessType: 'HKD', taxCode: '', businessAddress: '', representative: '', representativeId: '', representativePhone: '',
-  bankName: '', bankAccountNo: '', bankAccountName: '', contractNo: '', contractSignedAt: '',
+type PartnerText = Exclude<keyof PartnerInfo, 'businessAddress' | 'businessAddressParts'>;
+export type PartnerFormValue = Record<PartnerText, string> & { businessAddressParts: AddressParts };
+export const EMPTY_PARTNER: PartnerFormValue = {
+  businessName: '', businessType: 'HKD', taxCode: '', representative: '', representativeId: '', representativePhone: '',
+  bankName: '', bankAccountNo: '', bankAccountName: '', contractNo: '', contractSignedAt: '', businessAddressParts: EMPTY_ADDRESS,
 };
 
 export interface SuperStore extends PartnerInfo {
   id: number; slug: string; name: string; phone?: string | null; email?: string | null; address?: string | null; logo?: string | null;
+  /** Địa chỉ cửa hàng theo đơn vị hành chính */
+  street?: string | null; provinceCode?: number | null; provinceName?: string | null; districtCode?: number | null; districtName?: string | null;
+  wardCode?: number | null; wardName?: string | null;
   status: StoreStatus; planId: number | null; planExpiresAt: string | null; note?: string | null; createdAt: string;
   plan: Pick<Plan, 'id' | 'code' | 'name' | 'priceMonthly' | 'maxProducts' | 'maxStaff'> | null;
   _count: { products: number; orders: number; members: number };

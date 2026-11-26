@@ -1,5 +1,6 @@
 'use client';
 import { Bike, Phone, RefreshCw, Search, XCircle } from 'lucide-react';
+import { DeliveryMoney } from '@/components/DeliveryMoney';
 import { MapView, type MapPoint } from '@/components/map/MapView';
 import { dateTime, money } from '@/lib/format';
 import { DELIVERY_STATUS, distanceKm, VEHICLES } from '@/lib/geo';
@@ -59,6 +60,12 @@ export function DeliveryTracker({ d, onRequest, onCancel, onRefresh, staff = fal
       {d.status === 'FAILED' && <p className="text-sm text-red-600">Giao không thành công: {d.failReason}</p>}
       {d.status === 'CANCELLED' && d.failReason && <p className="text-sm text-slate-500">{d.failReason}</p>}
       {d.status === 'DELIVERED' && d.deliveredAt && <p className="text-sm text-green-700">Đã giao lúc {dateTime(d.deliveredAt)}{d.shipper ? ` bởi ${d.shipper.fullName}` : ''}</p>}
+      {staff && !['FAILED', 'CANCELLED'].includes(d.status) && (
+        <div className="space-y-2 border-t border-slate-100 pt-3">
+          <h4 className="text-sm font-bold text-ink">Tiền với tài xế</h4>
+          <DeliveryMoney fee={d.fee} codAmount={d.codAmount} viewer="store" />
+        </div>
+      )}
       {staff && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm">
           <span className="text-slate-500">Phí tài xế {money(d.fee)} · thu hộ {money(d.codAmount)}{d.distanceKm != null ? ` · ${d.distanceKm} km` : ''}</span>

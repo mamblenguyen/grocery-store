@@ -1,9 +1,10 @@
 import { Body, Controller, Get, Module, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { DeliveryStatus, Role } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEmail, IsIn, IsNumber, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsIn, IsNumber, IsOptional, IsString, Max, Min, MinLength, ValidateNested } from 'class-validator';
 import { AdminOnly, Auth, CurrentUser, SuperOnly } from '../common/decorators';
 import { PaginationDto } from '../common/pagination.dto';
+import { ServiceAreaDto } from '../geo/vn-address';
 import { OrdersModule } from '../orders/orders.module';
 import { ShipperService } from './shipper.service';
 
@@ -19,12 +20,15 @@ class UpdateMeDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) lng?: number;
   @IsOptional() @IsIn(VEHICLES) vehicleType?: string;
   @IsOptional() @IsString() plateNumber?: string;
-  @IsOptional() @IsString() area?: string;
+  /** Vùng hoạt động theo Tỉnh/Huyện/Xã – mảng rỗng = nhận đơn mọi nơi */
+  @IsOptional() @IsArray() @ArrayMaxSize(30, { message: 'Tối đa 30 vùng hoạt động' }) @ValidateNested({ each: true }) @Type(() => ServiceAreaDto) areas?: ServiceAreaDto[];
 }
 class JobsQuery {
   @IsOptional() @Type(() => Number) @IsNumber() lat?: number;
   @IsOptional() @Type(() => Number) @IsNumber() lng?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) radiusKm?: number;
+  /** area (mặc định) = chỉ đơn có cửa hàng trong vùng hoạt động; all = mọi đơn */
+  @IsOptional() @IsIn(['area', 'all']) scope?: 'area' | 'all';
 }
 class MineQuery extends PaginationDto {
   @IsOptional() @IsIn(['active', 'history']) status?: 'active' | 'history';
@@ -38,7 +42,8 @@ class CreateShipperDto {
   @IsOptional() @IsIn(VEHICLES) vehicleType?: string;
   @IsOptional() @IsString() plateNumber?: string;
   @IsOptional() @IsString() idNumber?: string;
-  @IsOptional() @IsString() area?: string;
+  /** Vùng hoạt động theo Tỉnh/Huyện/Xã – mảng rỗng = nhận đơn mọi nơi */
+  @IsOptional() @IsArray() @ArrayMaxSize(30, { message: 'Tối đa 30 vùng hoạt động' }) @ValidateNested({ each: true }) @Type(() => ServiceAreaDto) areas?: ServiceAreaDto[];
 }
 class UpdateShipperDto {
   @IsOptional() @IsString() @MinLength(2) fullName?: string;
@@ -48,7 +53,8 @@ class UpdateShipperDto {
   @IsOptional() @IsIn(VEHICLES) vehicleType?: string;
   @IsOptional() @IsString() plateNumber?: string;
   @IsOptional() @IsString() idNumber?: string;
-  @IsOptional() @IsString() area?: string;
+  /** Vùng hoạt động theo Tỉnh/Huyện/Xã – mảng rỗng = nhận đơn mọi nơi */
+  @IsOptional() @IsArray() @ArrayMaxSize(30, { message: 'Tối đa 30 vùng hoạt động' }) @ValidateNested({ each: true }) @Type(() => ServiceAreaDto) areas?: ServiceAreaDto[];
 }
 class DeliveriesQuery extends PaginationDto {
   @IsOptional() @IsIn(Object.values(DeliveryStatus)) status?: DeliveryStatus;

@@ -35,6 +35,8 @@ export default function AccountTab() {
         <Card style={{ paddingVertical: 6 }}>
           <ListItem icon="receipt-outline" title="Đơn hàng của tôi" onPress={() => router.push('/orders')} />
           <Divider />
+          <ListItem icon="return-down-back-outline" title="Đổi trả & khiếu nại" onPress={() => router.push('/account/returns')} />
+          <Divider />
           <ListItem icon="notifications-outline" title="Thông báo" onPress={() => router.push('/account/notifications')} right={unread ? <Badge label={String(unread)} fg="#fff" bg={C.red} /> : undefined} />
           <Divider />
           <ListItem icon="heart-outline" title="Sản phẩm yêu thích" subtitle={wl.count ? `${wl.count} sản phẩm` : undefined} onPress={() => router.push('/account/wishlist')} />
@@ -53,7 +55,7 @@ export default function AccountTab() {
       )}
       {(isStaff || isSuper) && (
         <Card style={{ paddingVertical: 6 }}>
-          <ListItem icon={isSuper ? 'shield-checkmark-outline' : 'briefcase-outline'} title={isSuper ? 'Quản trị nền tảng' : `Quản lý ${user?.store?.name ?? 'cửa hàng'}`} subtitle={isSuper ? 'Đối tác, gói dịch vụ, gia hạn' : 'POS, kho, đơn hàng, báo cáo'} onPress={() => router.push('/manage')} />
+          <ListItem icon={isSuper ? 'shield-checkmark-outline' : 'briefcase-outline'} title={isSuper && !isStaff ? 'Về trang quản trị nền tảng' : `Về trang quản lý ${user?.store?.name ?? 'cửa hàng'}`} subtitle={isSuper && !isStaff ? 'Đối tác, gói dịch vụ, gia hạn' : 'Doanh thu, bán quầy, đơn hàng, kho'} onPress={() => router.replace('/admin')} />
         </Card>
       )}
       <Card style={{ paddingVertical: 6 }}>

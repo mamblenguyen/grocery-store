@@ -77,12 +77,14 @@ export class ProductsService {
       where.minPrice = { ...(q.minPrice !== undefined && { gte: q.minPrice }), ...(q.maxPrice !== undefined && { lte: q.maxPrice }) };
     }
     if (q.featured) where.isFeatured = true;
-    if (q.inStock) where.variants = { some: { isActive: true, stock: { gt: 0 } } };
+    if (q.inStock || q.deals)
+      where.variants = { some: { isActive: true, ...(q.inStock && { stock: { gt: 0 } }), ...(q.deals && { compareAtPrice: { not: null } }) } };
     return where;
   }
 
-  private orderBy(sort?: string): Prisma.ProductOrderByWithRelationInput {
+  private orderBy(sort?: string): Prisma.ProductOrderByWithRelationInput | Prisma.ProductOrderByWithRelationInput[] {
     switch (sort) {
+      case 'rating': return [{ ratingAvg: 'desc' }, { ratingCount: 'desc' }];
       case 'price_asc': return { minPrice: 'asc' };
       case 'price_desc': return { minPrice: 'desc' };
       case 'name': return { name: 'asc' };

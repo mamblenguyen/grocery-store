@@ -61,11 +61,6 @@
     "scheme": "taphoaxanh",
     "experiments": {
       "typedRoutes": false
-    },
-    "extra": {
-      "eas": {
-        "projectId": ""
-      }
     }
   }
 }

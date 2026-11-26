@@ -9,7 +9,7 @@ import { paged, paginate } from '../common/utils';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface NotifyInput {
-  type: 'ORDER_STATUS' | 'PAYMENT' | 'NEW_ORDER' | 'SYSTEM';
+  type: 'ORDER_STATUS' | 'PAYMENT' | 'NEW_ORDER' | 'SYSTEM' | 'EINVOICE' | 'PARTNER';
   title: string;
   body: string;
   data?: Record<string, unknown>;

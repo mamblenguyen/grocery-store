@@ -7,6 +7,7 @@ import { CameraScanPanel } from '@/components/admin/CameraScanPanel';
 import { beep, useHidScanner } from '@/components/admin/scan-utils';
 import { PickedVariant } from '@/components/admin/VariantPicker';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/ui';
 import { useSettings } from '@/context/settings';
 import { api, imageUrl } from '@/lib/api';
@@ -14,9 +15,13 @@ import { money, vietQrUrl } from '@/lib/format';
 import type { Order } from '@/lib/types';
 
 interface Line { v: PickedVariant; qty: number }
+interface PosMember {
+  posToken: string; customerName: string; phoneLast4: string; pointsBalance: number;
+  pointsToUse: number; pointDiscount: number; couponCode: string | null; couponDiscount: number;
+}
 interface Bill {
   id: number; lines: Line[]; customer: { name: string; phone: string }; method: 'CASH' | 'BANK_TRANSFER';
-  cash: number | ''; manualDiscount: number | ''; coupon: string; couponDiscount: number;
+  cash: number | ''; manualDiscount: number | ''; coupon: string; couponDiscount: number; member?: PosMember;
 }
 const newBill = (id: number): Bill => ({ id, lines: [], customer: { name: '', phone: '' }, method: 'CASH', cash: '', manualDiscount: '', coupon: '', couponDiscount: 0 });
 const STORE_KEY = 'pos_bills_v1';
@@ -82,7 +87,7 @@ export default function PosPage() {
       const ex = b.lines.find((l) => l.v.id === v.id);
       const next = Math.min((ex?.qty ?? 0) + qty, v.stock); // chặn trần khi quét rất nhanh liên tiếp
       const lines = ex ? b.lines.map((l) => (l.v.id === v.id ? { v, qty: next } : l)) : [{ v, qty: next }, ...b.lines];
-      return { ...b, lines, couponDiscount: 0 };
+      return { ...b, lines, couponDiscount: 0, coupon: '', member: undefined };
     }));
     beep('ok');
     setFlash(v.id); setTimeout(() => setFlash((f) => (f === v.id ? null : f)), 700);
@@ -97,6 +102,15 @@ export default function PosPage() {
     if (m) { qty = Number(m[1]); code = m[2].trim(); }
     if (!code) { setMult(Math.max(1, qty)); return; }
     try {
+      if (/^LOYALTY:/i.test(code)) {
+        const idx = activeRef.current;
+        const cur = billsRef.current[idx];
+        const subtotal = cur.lines.reduce((sum, l) => sum + l.v.price * l.qty, 0);
+        if (!subtotal) throw new Error('Vui lòng quét sản phẩm trước khi quét mã thành viên');
+        const member = await api<PosMember>('/admin/operations/loyalty/resolve-pos-token', { method: 'POST', json: { token: code, subtotal } });
+        setBills((bs) => bs.map((b, i) => i === idx ? { ...b, member, coupon: member.couponCode ?? '', couponDiscount: member.couponDiscount, customer: { name: '', phone: '' } } : b));
+        beep('ok'); toast(`Đã nhận ${member.customerName}${member.pointsToUse ? ` · dùng ${member.pointsToUse} điểm` : ''}`); setMult(1); return;
+      }
       const v = await api<PickedVariant>(`/admin/stock/lookup?code=${encodeURIComponent(code)}`);
       if (add(v, Math.max(1, qty))) setMult(1);
     } catch {
@@ -120,6 +134,7 @@ export default function PosPage() {
     e.preventDefault();
     const raw = q.trim();
     if (!raw) return;
+    if (/^LOYALTY:/i.test(raw)) { await handleCode(raw); setQ(''); setResults([]); return; }
     if (/^\d{1,3}\*$/.test(raw)) { setMult(Number(raw.slice(0, -1)) || 1); setQ(''); return; }
     const before = multRef.current;
     const m = raw.match(/^(\d{1,3})\*(.*)$/);
@@ -135,10 +150,10 @@ export default function PosPage() {
     setQ(''); setResults([]);
   };
 
-  const setQty = (id: number, qty: number) => update({ lines: bill.lines.map((l) => (l.v.id === id ? { ...l, qty: Math.max(1, Math.min(qty, l.v.stock)) } : l)), couponDiscount: 0 });
+  const setQty = (id: number, qty: number) => update({ lines: bill.lines.map((l) => (l.v.id === id ? { ...l, qty: Math.max(1, Math.min(qty, l.v.stock)) } : l)), couponDiscount: 0, coupon: '', member: undefined });
   const subtotal = bill.lines.reduce((s, l) => s + l.v.price * l.qty, 0);
   const md = Math.min(Number(bill.manualDiscount) || 0, Math.max(0, subtotal - bill.couponDiscount));
-  const total = Math.max(0, subtotal - bill.couponDiscount - md);
+  const total = Math.max(0, subtotal - bill.couponDiscount - (bill.member?.pointDiscount ?? 0) - md);
   const change = bill.method === 'CASH' && bill.cash !== '' ? Number(bill.cash) - total : 0;
   const itemCount = bill.lines.reduce((s, l) => s + l.qty, 0);
 
@@ -148,8 +163,8 @@ export default function PosPage() {
   };
 
   const addBill = () => { const id = Math.max(...bills.map((b) => b.id)) + 1; setBills([...bills, newBill(id)]); setActive(bills.length); };
-  const closeBill = (i: number) => {
-    if (bills[i].lines.length && !confirm(`Huỷ hoá đơn chờ #${bills[i].id}?`)) return;
+  const closeBill = async (i: number) => {
+    if (bills[i].lines.length && !(await confirmDialog(`Huỷ hoá đơn chờ #${bills[i].id}?`, 'Các sản phẩm trong hoá đơn sẽ bị xoá.', 'Huỷ hoá đơn', true))) return;
     const rest = bills.filter((_, j) => j !== i);
     setBills(rest.length ? rest : [newBill(1)]);
     setActive((a) => Math.max(0, Math.min(a > i ? a - 1 : a, rest.length - 1)));
@@ -166,6 +181,7 @@ export default function PosPage() {
           items: bill.lines.map((l) => ({ variantId: l.v.id, quantity: l.qty })),
           paymentMethod: bill.method, cashReceived: bill.method === 'CASH' ? (bill.cash === '' ? total : Number(bill.cash)) : undefined,
           manualDiscount: md || undefined, couponCode: bill.couponDiscount ? bill.coupon : undefined,
+          posToken: bill.member?.posToken,
           customerName: bill.customer.name || undefined, phone: bill.customer.phone || undefined,
         },
       });
@@ -266,7 +282,7 @@ export default function PosPage() {
         </div>
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 font-bold text-ink"><ShoppingBasket className="h-5 w-5 text-brand-600" /> Hoá đơn #{bill.id}</h2>
-          {bill.lines.length > 0 && <button className="btn-ghost btn-sm text-red-600" onClick={() => confirm('Xoá hết sản phẩm trong hoá đơn này?') && update(newBill(bill.id))}><RotateCcw className="h-3.5 w-3.5" /> Làm mới</button>}
+          {bill.lines.length > 0 && <button className="btn-ghost btn-sm text-red-600" onClick={async () => { if (await confirmDialog('Làm mới hoá đơn?', 'Toàn bộ sản phẩm và thông tin khách hàng sẽ bị xoá.', 'Làm mới', true)) update(newBill(bill.id)); }}><RotateCcw className="h-3.5 w-3.5" /> Làm mới</button>}
         </div>
         <div className="-mx-1 min-h-[140px] flex-1 space-y-1 overflow-y-auto px-1">
           {!bill.lines.length && <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-slate-400"><Search className="h-8 w-8" />Quét mã hoặc chọn sản phẩm để bắt đầu</div>}
@@ -279,21 +295,26 @@ export default function PosPage() {
                 <button className="p-1.5 text-slate-500" onClick={() => setQty(l.v.id, l.qty + 1)}><Plus className="h-3.5 w-3.5" /></button>
               </div>
               <div className="w-20 text-right text-sm font-bold">{money(l.v.price * l.qty)}</div>
-              <button className="p-1 text-slate-300 hover:text-red-500" onClick={() => update({ lines: bill.lines.filter((x) => x.v.id !== l.v.id), couponDiscount: 0 })}><Trash2 className="h-4 w-4" /></button>
+              <button className="p-1 text-slate-300 hover:text-red-500" onClick={() => update({ lines: bill.lines.filter((x) => x.v.id !== l.v.id), couponDiscount: 0, coupon: '', member: undefined })}><Trash2 className="h-4 w-4" /></button>
             </div>
           ))}
         </div>
 
         <div className="space-y-2.5 border-t border-slate-100 pt-3">
+          {bill.member && <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm">
+            <div><div className="font-bold text-brand-800">✓ {bill.member.customerName}</div><div className="text-xs text-brand-700">SĐT ••••{bill.member.phoneLast4} · Có {bill.member.pointsBalance.toLocaleString('vi-VN')} điểm</div></div>
+            <button className="text-xs font-bold text-red-600" onClick={() => update({ member: undefined, coupon: '', couponDiscount: 0 })}>Bỏ</button>
+          </div>}
           <div className="grid grid-cols-2 gap-2">
             <div className="relative"><User className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className="input pl-9" placeholder="Tên khách" value={bill.customer.name} onChange={(e) => update({ customer: { ...bill.customer, name: e.target.value } })} /></div>
             <input className="input" placeholder="SĐT" value={bill.customer.phone} onChange={(e) => update({ customer: { ...bill.customer, phone: e.target.value } })} />
-            <div className="flex gap-1"><input className="input uppercase" placeholder="Mã giảm giá" value={bill.coupon} onChange={(e) => update({ coupon: e.target.value, couponDiscount: 0 })} /><button className="btn-outline px-3" onClick={applyCoupon} disabled={!bill.coupon || !subtotal}>✓</button></div>
+            <div className="flex gap-1"><input className="input uppercase" placeholder="Mã giảm giá" value={bill.coupon} disabled={!!bill.member} onChange={(e) => update({ coupon: e.target.value, couponDiscount: 0 })} /><button className="btn-outline px-3" onClick={applyCoupon} disabled={!!bill.member || !bill.coupon || !subtotal}>✓</button></div>
             <input className="input" type="number" min={0} placeholder="Giảm tay (₫)" value={bill.manualDiscount} onChange={(e) => update({ manualDiscount: e.target.value === '' ? '' : Number(e.target.value) })} />
           </div>
           <div className="space-y-1 text-sm">
             <div className="flex justify-between"><span>Tạm tính ({itemCount} SP)</span><span>{money(subtotal)}</span></div>
             {bill.couponDiscount + md > 0 && <div className="flex justify-between text-red-600"><span>Giảm giá</span><span>-{money(bill.couponDiscount + md)}</span></div>}
+            {!!bill.member?.pointDiscount && <div className="flex justify-between text-brand-700"><span>Dùng {bill.member.pointsToUse} điểm</span><span>-{money(bill.member.pointDiscount)}</span></div>}
             <div className="flex items-end justify-between"><span className="font-semibold text-ink">Khách cần trả</span><span className="text-3xl font-extrabold text-brand-700">{money(total)}</span></div>
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -319,6 +340,7 @@ export default function PosPage() {
           <div className="space-y-4 text-center">
             <CircleCheck className="mx-auto h-14 w-14 text-brand-600" />
             <div><div className="text-sm text-slate-500">Hoá đơn {done.code}</div><div className="text-3xl font-extrabold text-ink">{money(done.total)}</div></div>
+            {done.user && <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-800"><b>{done.customerName}</b> đã tích <b>{Math.floor(done.total / 1000)} điểm</b>{done.loyaltyPointsUsed ? ` · đã dùng ${done.loyaltyPointsUsed} điểm` : ''}</div>}
             {done.paymentMethod === 'CASH' && done.cashReceived != null && <div className="rounded-xl bg-slate-50 p-3 text-sm">Khách đưa {money(done.cashReceived)} · Thối lại <b className="text-brand-700">{money(done.cashReceived - done.total)}</b></div>}
             <div className="grid grid-cols-2 gap-2">
               <a className="btn-outline" href={`/print/invoice/${done.id}?format=k80`} target="_blank"><Printer className="h-4 w-4" /> In bill K80</a>

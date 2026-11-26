@@ -6,6 +6,31 @@ export interface Banner {
   link?: string;
 }
 
+/**
+ * Phương pháp tính thuế GTGT của cửa hàng – quyết định loại hoá đơn:
+ *  - KHAU_TRU : doanh nghiệp / HKD nộp thuế theo phương pháp khấu trừ → Hoá đơn GTGT (mẫu số 1), ghi thuế suất từng mặt hàng
+ *  - TRUC_TIEP: HKD / doanh nghiệp tính thuế trực tiếp trên doanh thu (tỷ lệ %) → Hoá đơn bán hàng (mẫu số 2), KHÔNG ghi thuế suất
+ *  - MIEN     : HKD doanh thu năm không quá ngưỡng không chịu thuế (NĐ 68/2026 sửa đổi bởi NĐ 141/2026) – chỉ thông báo doanh thu
+ */
+export type TaxMethod = 'KHAU_TRU' | 'TRUC_TIEP' | 'MIEN';
+export interface TaxSettings {
+  method: TaxMethod;
+  /** Thuế suất mặc định cho sản phẩm chưa khai báo: "0" | "5" | "8" | "10" | "KCT" | "KKKNT" */
+  defaultVatRate: string;
+}
+export interface EInvoiceSettings {
+  /** Cho phép khách yêu cầu xuất hoá đơn điện tử khi đặt hàng */
+  enabled: boolean;
+  /** Tổ chức cung cấp dịch vụ HĐĐT mà cửa hàng đã ký hợp đồng (VNPT, Viettel, MISA, BKAV…) */
+  provider: string;
+  /** Mẫu số: "1" (HĐ GTGT) hoặc "2" (HĐ bán hàng) */
+  templateCode: string;
+  /** Ký hiệu hoá đơn đã đăng ký với cơ quan thuế, vd "C26MAA" */
+  series: string;
+  /** Trang tra cứu hoá đơn của nhà cung cấp */
+  lookupUrl: string;
+}
+
 export interface StoreSettings {
   // Thông tin cửa hàng
   storeName: string;
@@ -16,12 +41,15 @@ export interface StoreSettings {
   address: string;
   openingHours: string;
   announcement: string;
-  // Hoá đơn
+  // Hoá đơn & thuế
   taxCode: string;
-  /** % VAT đã bao gồm trong giá bán (0 = không tách thuế trên hoá đơn) */
-  vatRate: number;
+  tax: TaxSettings;
+  einvoice: EInvoiceSettings;
   invoiceFooter: string;
   // Giao hàng
+  /** DISTANCE = theo km (biểu phí của sàn) · FIXED = phí cố định của cửa hàng */
+  shippingMode: 'DISTANCE' | 'FIXED';
+  /** Phí cố định – dùng khi chọn FIXED, hoặc khi cửa hàng chưa ghim vị trí */
   shippingFee: number;
   freeShippingThreshold: number;
   minOrderValue: number;
@@ -45,8 +73,10 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   openingHours: '07:00 – 22:00 (cả tuần)',
   announcement: '🚚 Miễn phí giao hàng cho đơn từ 300.000₫ · Giao nhanh trong 2 giờ',
   taxCode: '',
-  vatRate: 8,
+  tax: { method: 'TRUC_TIEP', defaultVatRate: '8' },
+  einvoice: { enabled: false, provider: '', templateCode: '2', series: '', lookupUrl: '' },
   invoiceFooter: 'Cảm ơn quý khách đã mua sắm! Hàng đã mua được đổi trả trong 7 ngày kèm hoá đơn.',
+  shippingMode: 'DISTANCE',
   shippingFee: 20000,
   freeShippingThreshold: 300000,
   minOrderValue: 0,

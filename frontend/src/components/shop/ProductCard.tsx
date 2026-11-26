@@ -1,6 +1,6 @@
 'use client';
 import { storeHref, useStoreHref, useStoreSlug } from '@/context/store';
-import { Heart, Plus, ShoppingCart, Store } from 'lucide-react';
+import { Heart, ShoppingCart, Store } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
@@ -32,20 +32,22 @@ export function ProductCard({ p }: { p: Product }) {
   }, undefined);
   const discount = best?.compareAtPrice ? Math.round((1 - best.price / best.compareAtPrice) * 100) : 0;
   const outOfStock = active.every((v) => v.stock <= 0);
-  const single = active.length === 1 ? active[0] : null;
+  // Thêm nhanh: 1 loại → loại đó; nhiều loại → loại rẻ nhất còn hàng (đúng giá "… trở lên" hiển thị trên card)
+  const pick = active.filter((v) => v.stock > 0).reduce<(typeof active)[number] | undefined>((b, v) => (!b || v.price < b.price ? v : b), undefined);
 
   const quickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!single || (!cart && !market)) return router.push(sh(`/products/${p.slug}`));
-    const line = { variantId: single.id, productId: p.id, slug: p.slug, productName: p.name, variantName: single.name, image: p.thumbnail, price: single.price, stock: single.stock };
+    if (!pick || (!cart && !market)) return router.push(sh(`/products/${p.slug}`));
+    const label = active.length > 1 && pick.name ? `${p.name} (${pick.name})` : p.name;
+    const line = { variantId: pick.id, productId: p.id, slug: p.slug, productName: p.name, variantName: pick.name, image: p.thumbnail, price: pick.price, stock: pick.stock };
     if (market) {
-      if (!all.addTo({ slug: p.store!.slug, name: p.store!.name }, line)) return toast(`Chỉ còn ${single.stock} sản phẩm`, 'error');
-      return toast(`Đã thêm "${p.name}" vào giỏ ${p.store!.name}`);
+      if (!all.addTo({ slug: p.store!.slug, name: p.store!.name }, line)) return toast(`Chỉ còn ${pick.stock} sản phẩm`, 'error');
+      return toast(`Đã thêm "${label}" vào giỏ ${p.store!.name}`);
     }
-    const inCart = cart!.items.find((i) => i.variantId === single.id)?.quantity ?? 0;
-    if (inCart >= single.stock) return toast(`Chỉ còn ${single.stock} sản phẩm`, 'error');
+    const inCart = cart!.items.find((i) => i.variantId === pick.id)?.quantity ?? 0;
+    if (inCart >= pick.stock) return toast(`Chỉ còn ${pick.stock} sản phẩm`, 'error');
     cart!.add(line);
-    toast(`Đã thêm "${p.name}" vào giỏ`);
+    toast(`Đã thêm "${label}" vào giỏ`);
   };
 
   const totalStock = active.reduce((n, v) => n + Math.max(0, v.stock), 0);
@@ -104,10 +106,10 @@ export function ProductCard({ p }: { p: Product }) {
             <button
               onClick={quickAdd}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white shadow-md shadow-brand-600/30 transition hover:scale-105 hover:bg-brand-700 active:scale-95"
-              aria-label={single ? 'Thêm vào giỏ' : 'Chọn phân loại'}
-              title={single ? 'Thêm vào giỏ' : 'Chọn phân loại'}
+              aria-label="Thêm vào giỏ"
+              title={active.length > 1 && pick?.name ? `Thêm vào giỏ: ${pick.name}` : 'Thêm vào giỏ'}
             >
-              {single ? <Plus className="h-5 w-5" strokeWidth={2.5} /> : <ShoppingCart className="h-4 w-4" />}
+              <ShoppingCart className="h-4 w-4" />
             </button>
           )}
         </div>

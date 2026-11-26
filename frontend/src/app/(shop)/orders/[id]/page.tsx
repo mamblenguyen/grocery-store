@@ -8,9 +8,11 @@ import { OrderTimeline } from '@/components/OrderTimeline';
 import { AccountShell } from '@/components/shop/AccountShell';
 import { BankTransferBox } from '@/components/shop/BankTransferBox';
 import { useToast } from '@/components/Toast';
+import { promptDialog } from '@/components/PromptDialog';
 import { PaymentBadge, Spinner, StatusBadge } from '@/components/ui';
 import { useAllCarts, type CartItem } from '@/context/cart';
 import { FALLBACK_SETTINGS } from '@/context/settings';
+import { CustomerEInvoiceCard } from '@/components/EInvoice';
 import { api, imageUrl } from '@/lib/api';
 import { dateOnly, dateTime, money, PAYMENT_METHOD } from '@/lib/format';
 import type { Order, StoreSettings } from '@/lib/types';
@@ -38,7 +40,7 @@ function OrderDetailInner() {
   useEffect(() => { if (slug) api<StoreSettings>('/settings', { headers: { 'X-Store': slug } }).then(setSettings).catch(() => {}); }, [slug]);
 
   const cancel = async () => {
-    const reason = prompt('Lý do huỷ đơn?');
+    const reason = await promptDialog({ title: 'Huỷ đơn hàng?', message: 'Hàng trong đơn sẽ được hoàn lại kho.', label: 'Lý do huỷ', placeholder: 'Nhập lý do huỷ đơn', confirmText: 'Huỷ đơn', destructive: true });
     if (reason === null) return;
     try { setOrder(await api<Order>(`/orders/my/${id}/cancel`, { method: 'PATCH', json: { reason } })); toast('Đã huỷ đơn hàng'); }
     catch (e: any) { toast(e.message, 'error'); }
@@ -118,6 +120,8 @@ function OrderDetailInner() {
           </div>
         </div>
 
+        <CustomerEInvoiceCard order={order} enabled={settings.einvoice?.enabled ?? false} onChange={setOrder} />
+
         <div className="card">
           <h3 className="mb-2 font-bold text-ink">Sản phẩm</h3>
           <div className="divide-y divide-slate-100">
@@ -143,6 +147,7 @@ function OrderDetailInner() {
           <div className="flex flex-wrap gap-2">
             <a href={`/print/invoice/${order.id}`} target="_blank" className="btn-outline"><Printer className="h-4 w-4" /> In hoá đơn</a>
             <button className="btn-outline" onClick={reorder}><RefreshCw className="h-4 w-4" /> Mua lại</button>
+            {order.status === 'COMPLETED' && <Link href={`/account/returns?orderId=${order.id}`} className="btn-outline"><RefreshCw className="h-4 w-4" /> Đổi trả / khiếu nại</Link>}
             {order.status === 'PENDING' && order.paymentStatus !== 'PAID' && <button className="btn-danger" onClick={cancel}>Huỷ đơn</button>}
           </div>
         </div>

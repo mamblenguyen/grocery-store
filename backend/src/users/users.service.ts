@@ -79,39 +79,36 @@ export class UsersService {
     const users = await this.prisma.user.findMany({
       where: {
         id: { in: groups.map((g) => g.userId!) },
+        role: 'CUSTOMER',
         ...(q.search && { OR: [{ email: { contains: q.search } }, { fullName: { contains: q.search } }, { phone: { contains: q.search } }] }),
       },
-      select: { id: true, email: true, fullName: true, phone: true, createdAt: true },
+      select: { id: true, email: true, fullName: true, phone: true, isActive: true, createdAt: true },
     });
+    const loyalty = await this.prisma.loyaltyAccount.findMany({ where: { ...sc, userId: { in: users.map((u) => u.id) } } });
     const rows = users
-      .map((u) => { const g = groups.find((x) => x.userId === u.id)!; return { ...u, orders: g._count._all, lastOrderAt: g._max.createdAt, totalSpent: spentMap.get(u.id) ?? 0 }; })
+      .map((u) => { const g = groups.find((x) => x.userId === u.id)!; const l = loyalty.find((x) => x.userId === u.id); return { ...u, orders: g._count._all, lastOrderAt: g._max.createdAt, totalSpent: spentMap.get(u.id) ?? 0, points: l?.points ?? 0, lifetimePoints: l?.lifetimePoints ?? 0, tier: l?.tier ?? 'MEMBER' }; })
       .sort((a, b) => b.totalSpent - a.totalSpent);
     return paged(rows.slice(skip, skip + take), rows.length, page, limit);
   }
 
   async customerDetail(id: number) {
     const sc = scope();
+    const sid = storeId();
     const orders = await this.prisma.order.findMany({ where: { userId: id, ...sc }, orderBy: { createdAt: 'desc' }, take: 50 });
     if (!orders.length) throw new NotFoundException('Khách hàng chưa mua tại cửa hàng');
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id }, select: { id: true, email: true, fullName: true, phone: true, createdAt: true } });
-    const totalSpent = orders.filter((o) => o.status === 'COMPLETED').reduce((s, o) => s + o.total, 0);
-    return { ...user, orders, totalSpent };
-  }
-
-  // ───────────── Gói dịch vụ của cửa hàng ─────────────
-  async subscription() {
-    const sid = storeId();
-    const [store, products, members, payments] = await Promise.all([
-      this.prisma.store.findUniqueOrThrow({
-        where: { id: sid },
-        select: { id: true, slug: true, name: true, status: true, planExpiresAt: true, createdAt: true, plan: true },
-      }),
-      this.prisma.product.count({ where: { storeId: sid } }),
-      this.prisma.user.count({ where: { storeId: sid } }),
-      this.prisma.storePayment.findMany({ where: { storeId: sid }, orderBy: { createdAt: 'desc' }, take: 50, include: { plan: { select: { name: true } } } }),
+    const [user, loyalty, pointHistory, recipients, redemptions] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({ where: { id }, select: { id: true, email: true, fullName: true, phone: true, address: true, isActive: true, createdAt: true, updatedAt: true, addresses: { orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }] } } }),
+      this.prisma.loyaltyAccount.findUnique({ where: { storeId_userId: { storeId: sid, userId: id } } }),
+      this.prisma.loyaltyTransaction.findMany({ where: { storeId: sid, userId: id }, orderBy: { createdAt: 'desc' }, take: 100 }),
+      this.prisma.couponRecipient.findMany({ where: { userId: id, coupon: { storeId: sid } }, include: { coupon: true }, orderBy: { createdAt: 'desc' } }),
+      this.prisma.couponRedemption.findMany({ where: { storeId: sid, userId: id } }),
     ]);
-    const plans = await this.prisma.plan.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }, { priceMonthly: 'asc' }] });
-    const daysLeft = store.planExpiresAt ? Math.ceil((store.planExpiresAt.getTime() - Date.now()) / 86400000) : null;
-    return { store: { ...store, daysLeft }, usage: { products, staff: Math.max(0, members - 1) }, payments, plans };
+    const publicCoupons = await this.prisma.coupon.findMany({ where: { storeId: sid, audienceAll: true, isActive: true }, orderBy: { createdAt: 'desc' } });
+    const usedMap = new Map(redemptions.map((x) => [x.couponId, x]));
+    const coupons = [...recipients.map((x) => x.coupon), ...publicCoupons]
+      .filter((c, i, all) => all.findIndex((x) => x.id === c.id) === i)
+      .map((c) => ({ ...c, assigned: !c.audienceAll, usedAt: usedMap.get(c.id)?.createdAt ?? null, redemptionOrderId: usedMap.get(c.id)?.orderId ?? null }));
+    const totalSpent = orders.filter((o) => o.status === 'COMPLETED').reduce((s, o) => s + o.total, 0);
+    return { ...user, orders, totalSpent, loyalty: loyalty ?? { points: 0, lifetimePoints: 0, tier: 'MEMBER', joinedAt: null }, pointHistory, coupons };
   }
 }

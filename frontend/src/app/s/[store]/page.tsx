@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { HeroSlider } from '@/components/shop/HeroSlider';
 import { ProductCardSkeleton, ProductGrid } from '@/components/shop/ProductCard';
+import { Carousel } from '@/components/ui/Carousel';
 import { useSettings } from '@/context/settings';
 import { api, imageUrl } from '@/lib/api';
 import { money } from '@/lib/format';
@@ -47,7 +48,7 @@ export default function HomePage() {
   const perks = [
     { icon: <Truck className="h-6 w-6" />, title: 'Giao nhanh 2 giờ', text: settings.freeShippingThreshold ? `Miễn phí đơn từ ${money(settings.freeShippingThreshold)}` : 'Nội thành' },
     { icon: <Leaf className="h-6 w-6" />, title: 'Tươi ngon mỗi ngày', text: 'Nhập hàng mới mỗi sáng' },
-    { icon: <ShieldCheck className="h-6 w-6" />, title: 'Thanh toán an toàn', text: 'COD, VietQR, VNPay' },
+    { icon: <ShieldCheck className="h-6 w-6" />, title: 'Thanh toán an toàn', text: 'COD, chuyển khoản VietQR' },
     { icon: <Headphones className="h-6 w-6" />, title: 'Hỗ trợ tận tâm', text: settings.hotline ? `Hotline ${settings.hotline}` : 'Đổi trả trong 7 ngày' },
   ];
 
@@ -76,10 +77,13 @@ export default function HomePage() {
       </section>
 
       <section className="container-x py-10">
-        <h2 className="section-title mb-5">Mua theo danh mục</h2>
-        <div className="grid grid-cols-4 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+        <div className="mb-5 flex items-end justify-between gap-4">
+          <h2 className="section-title">Mua theo danh mục</h2>
+          <Link href={sh('/products')} className="flex shrink-0 items-center gap-1 text-sm font-semibold text-brand-700 transition-all hover:gap-2">Tất cả sản phẩm <ArrowRight className="h-4 w-4" /></Link>
+        </div>
+        <Carousel label="Mua theo danh mục">
           {cats.map((c) => (
-            <Link key={c.id} href={sh(`/products?category=${c.slug}`)} className="group flex flex-col items-center gap-2.5 rounded-2xl border border-slate-200/70 bg-white p-3 text-center transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-soft">
+            <Link key={c.id} href={sh(`/products?category=${c.slug}`)} className="group flex w-28 shrink-0 flex-col items-center gap-2.5 rounded-2xl border border-slate-200/70 bg-white p-3 text-center transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-soft sm:w-36">
               <div className="aspect-square w-full overflow-hidden rounded-xl bg-brand-50">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imageUrl(c.image)} alt={c.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
@@ -87,7 +91,7 @@ export default function HomePage() {
               <span className="line-clamp-2 text-xs leading-tight font-semibold text-slate-700 sm:text-[13px]">{c.name}</span>
             </Link>
           ))}
-        </div>
+        </Carousel>
       </section>
 
       {deals?.length ? (

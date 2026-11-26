@@ -14,8 +14,11 @@ import { currentPosition, type LatLng } from '@/lib/geo';
 import { money, ymd } from '@/lib/format';
 import { C, R } from '@/lib/theme';
 import type { Address, Order } from '@/lib/types';
+import { AddressFields } from '@/components/AddressPicker';
+import { type AddressParts, EMPTY_ADDRESS, isComplete, toParts, toPayload } from '@/lib/vn-address';
 
-interface Preview { subtotal: number; discount: number; shippingFee: number; total: number }
+interface Shipping { mode: 'DISTANCE' | 'FIXED'; km: number | null; fee: number; needPin: boolean; outOfRange: boolean; freeShip: boolean; note: string }
+interface Preview { subtotal: number; discount: number; shippingFee: number; total: number; shipping: Shipping | null }
 const WD = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 type Method = 'COD' | 'BANK_TRANSFER' | 'VNPAY';
 
@@ -27,7 +30,8 @@ export default function Checkout() {
   const [pin, setPin] = useState<LatLng | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addrId, setAddrId] = useState<number | 'new'>('new');
-  const [form, setForm] = useState({ customerName: '', phone: '', address: '', note: '' });
+  const [form, setForm] = useState({ customerName: '', phone: '', note: '' });
+  const [parts, setParts] = useState<AddressParts>(EMPTY_ADDRESS);
   const [method, setMethod] = useState<Method>('COD');
   const [day, setDay] = useState('');
   const [slot, setSlot] = useState('');
@@ -53,24 +57,31 @@ export default function Checkout() {
     api<Address[]>('/addresses').then((l) => {
       setAddresses(l);
       const d = l.find((a) => a.isDefault) ?? l[0];
-      if (d) { setAddrId(d.id); setForm((f) => ({ ...f, customerName: d.fullName, phone: d.phone, address: d.address })); if (d.lat != null && d.lng != null) setPin({ lat: d.lat, lng: d.lng }); }
-      else setForm((f) => ({ ...f, customerName: user.fullName, phone: user.phone ?? '', address: user.address ?? '' }));
+      if (d) { setAddrId(d.id); setForm((f) => ({ ...f, customerName: d.fullName, phone: d.phone })); setParts(toParts(d)); if (d.lat != null && d.lng != null) setPin({ lat: d.lat, lng: d.lng }); }
+      else setForm((f) => ({ ...f, customerName: user.fullName, phone: user.phone ?? '' }));
     }).catch(() => {});
   }, [user, loading]);
 
   const runPreview = async (code?: string) => {
-    try { setPreview(await api<Preview>('/orders/preview', { method: 'POST', json: { items, couponCode: code } })); setError(''); return true; }
+    try { setPreview(await api<Preview>('/orders/preview', { method: 'POST', json: { items, couponCode: code, ...(pin && { lat: pin.lat, lng: pin.lng }) } })); setError(''); return true; }
     catch (e: any) { setError(e.message); return false; }
   };
-  useEffect(() => { if (items.length) runPreview(applied); }, [cart.items.length]); // eslint-disable-line
+  // Tính lại khi giỏ hoặc vị trí giao thay đổi (phí ship theo km)
+  useEffect(() => { if (items.length) runPreview(applied); }, [cart.items.length, pin?.lat, pin?.lng]); // eslint-disable-line
 
   const submit = async () => {
-    if (!form.customerName || !form.phone || !form.address) return setError('Vui lòng nhập đủ người nhận, số điện thoại và địa chỉ');
+    if (!form.customerName || !form.phone) return setError('Vui lòng nhập đủ người nhận và số điện thoại');
+    if (!isComplete(parts)) return setError('Chọn đủ Tỉnh/Thành phố, Quận/Huyện, Phường/Xã và nhập số nhà, tên đường');
     if (settings.deliverySlots.length && !slot) return setError('Vui lòng chọn khung giờ giao hàng');
+    if (preview?.shipping?.needPin) return setError('Vui lòng ghim vị trí giao hàng để tính phí ship theo quãng đường');
+    if (preview?.shipping?.outOfRange) return setError(`${preview.shipping.note} – cửa hàng chưa giao tới khu vực này`);
     setBusy(true); setError('');
     try {
-      const order = await api<Order>('/orders', { method: 'POST', json: { ...form, items, couponCode: applied, paymentMethod: method, ...(settings.deliverySlots.length && { deliveryDate: day, deliverySlot: slot }), ...(pin && { lat: pin.lat, lng: pin.lng }) } });
-      if (addrId === 'new' && !addresses.length) api('/addresses', { method: 'POST', json: { fullName: form.customerName, phone: form.phone, address: form.address, isDefault: true } }).catch(() => {});
+      const order = await api<Order>('/orders', { method: 'POST', json: { ...form, addressParts: toPayload(parts), items, couponCode: applied, paymentMethod: method, ...(settings.deliverySlots.length && { deliveryDate: day, deliverySlot: slot }), ...(pin && { lat: pin.lat, lng: pin.lng }) } });
+      if (addrId === 'new' && !addresses.length) api('/addresses', { method: 'POST', json: { fullName: form.customerName, phone: form.phone, addressParts: toPayload(parts), isDefault: true, ...(pin && { lat: pin.lat, lng: pin.lng }) } }).catch(() => {});
+      // Địa chỉ đã lưu kiểu cũ → bổ sung Tỉnh/Huyện/Xã vào sổ địa chỉ
+      const saved = addresses.find((a) => a.id === addrId);
+      if (saved && saved.provinceCode == null) api(`/addresses/${saved.id}`, { method: 'PATCH', json: { fullName: saved.fullName, phone: saved.phone, addressParts: toPayload(parts) } }).catch(() => {});
       cart.clear();
       if (method === 'VNPAY') {
         const { paymentUrl } = await api<{ paymentUrl: string }>('/payments/vnpay/create', { method: 'POST', json: { orderId: order.id } });
@@ -90,18 +101,24 @@ export default function Checkout() {
         <Card style={{ gap: 12 }}>
           <Row gap={6}><Ionicons name="location-outline" size={20} color={C.brand600} /><T variant="h3">Địa chỉ nhận hàng</T></Row>
           {addresses.map((a) => (
-            <Pressable key={a.id} onPress={() => { setAddrId(a.id); setForm({ ...form, customerName: a.fullName, phone: a.phone, address: a.address }); }}
+            <Pressable key={a.id} onPress={() => { setAddrId(a.id); setForm({ ...form, customerName: a.fullName, phone: a.phone }); setParts(toParts(a)); }}
               style={{ borderWidth: 2, borderColor: addrId === a.id ? C.brand600 : C.line, backgroundColor: addrId === a.id ? C.brand50 : C.white, borderRadius: R.md, padding: 12 }}>
               <Text style={{ fontWeight: '700', color: C.ink }}>{a.fullName} · {a.phone}{a.isDefault ? '  (Mặc định)' : ''}</Text>
               <T variant="muted">{a.label ? `${a.label}: ` : ''}{a.address}</T>
+              {a.provinceCode == null && <T variant="small" style={{ color: C.amber }}>Cần chọn lại Tỉnh/Huyện/Xã</T>}
             </Pressable>
           ))}
-          {addresses.length > 0 && <Chip label="+ Địa chỉ khác" active={addrId === 'new'} onPress={() => { setAddrId('new'); setForm({ ...form, customerName: user.fullName, phone: '', address: '' }); }} />}
+          {addresses.length > 0 && <Chip label="+ Địa chỉ khác" active={addrId === 'new'} onPress={() => { setAddrId('new'); setForm({ ...form, customerName: user.fullName, phone: '' }); setParts(EMPTY_ADDRESS); }} />}
           {(addrId === 'new' || !addresses.length) && (
             <View style={{ gap: 10 }}>
               <Input testID="co-name" label="Họ tên người nhận" value={form.customerName} onChangeText={(v) => setForm({ ...form, customerName: v })} />
               <Input testID="co-phone" label="Số điện thoại" keyboardType="phone-pad" value={form.phone} onChangeText={(v) => setForm({ ...form, phone: v })} />
-              <Input testID="co-address" label="Địa chỉ" value={form.address} onChangeText={(v) => setForm({ ...form, address: v })} placeholder="Số nhà, đường, phường, quận, tỉnh" />
+              <AddressFields label="Địa chỉ giao hàng" testID="co-addr" value={parts} onChange={setParts} />
+            </View>
+          )}
+          {addrId !== 'new' && addresses.find((a) => a.id === addrId)?.provinceCode == null && addresses.length > 0 && (
+            <View style={{ gap: 10 }}>
+              <AddressFields label="Bổ sung Tỉnh/Huyện/Xã cho địa chỉ đã chọn" testID="co-fix" value={parts} onChange={setParts} hint="Địa chỉ cũ chưa đủ đơn vị hành chính – chọn lại (sẽ tự cập nhật vào sổ địa chỉ)" />
             </View>
           )}
           {/* Ghim vị trí giao hàng bằng GPS – tài xế tìm nhà nhanh hơn */}
@@ -109,8 +126,8 @@ export default function Checkout() {
             style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: pin ? C.brand500 : C.line, borderRadius: 12, padding: 12, backgroundColor: pin ? C.brand50 : C.white }}>
             <Ionicons name={pin ? 'location' : 'locate-outline'} size={20} color={pin ? C.brand700 : C.muted} />
             <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '700', color: C.ink }}>{pin ? 'Đã ghim vị trí giao hàng' : 'Ghim vị trí hiện tại (khuyên dùng)'}</Text>
-              <Text style={{ fontSize: 12, color: C.muted }}>{pin ? `${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)} · chạm để cập nhật` : 'Giúp tài xế tìm đúng nhà và bạn theo dõi tài xế'}</Text>
+              <Text style={{ fontWeight: '700', color: C.ink }}>{pin ? 'Đã ghim vị trí giao hàng' : settings.shippingMode === 'DISTANCE' ? 'Ghim vị trí hiện tại (bắt buộc)' : 'Ghim vị trí hiện tại (khuyên dùng)'}</Text>
+              <Text style={{ fontSize: 12, color: C.muted }}>{pin ? `${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)} · chạm để cập nhật` : settings.shippingMode === 'DISTANCE' ? 'Phí ship tính theo km từ cửa hàng tới vị trí này' : 'Giúp tài xế tìm đúng nhà và bạn theo dõi tài xế'}</Text>
             </View>
             {pin && <Pressable hitSlop={8} onPress={() => setPin(null)}><Ionicons name="close-circle" size={20} color={C.faint} /></Pressable>}
           </Pressable>
@@ -158,7 +175,11 @@ export default function Checkout() {
             <View style={{ gap: 4, borderTopWidth: 1, borderTopColor: C.line2, paddingTop: 10 }}>
               <Row style={{ justifyContent: 'space-between' }}><T>Tạm tính</T><T>{money(preview.subtotal)}</T></Row>
               {preview.discount > 0 && <Row style={{ justifyContent: 'space-between' }}><T style={{ color: C.red }}>Giảm giá</T><T style={{ color: C.red }}>-{money(preview.discount)}</T></Row>}
-              <Row style={{ justifyContent: 'space-between' }}><T>Phí giao hàng</T><T>{preview.shippingFee ? money(preview.shippingFee) : 'Miễn phí'}</T></Row>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <T>Phí giao hàng{preview.shipping?.mode === 'DISTANCE' && preview.shipping.km != null ? ` · ${preview.shipping.km} km` : ''}</T>
+                <T>{preview.shipping?.needPin ? 'Ghim vị trí để tính' : preview.shippingFee ? money(preview.shippingFee) : 'Miễn phí'}</T>
+              </Row>
+              {(preview.shipping?.needPin || preview.shipping?.outOfRange) && <Text style={{ fontSize: 12, color: preview.shipping.outOfRange ? C.red : C.muted }}>{preview.shipping.note}</Text>}
             </View>
           )}
         </Card>
@@ -166,7 +187,7 @@ export default function Checkout() {
       </ScrollView>
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: C.white, padding: 16, paddingBottom: 16 + insets.bottom, borderTopWidth: 1, borderTopColor: C.line, gap: 6 }}>
         <Row style={{ justifyContent: 'space-between' }}><T variant="h3">Tổng thanh toán</T><Text style={{ fontSize: 22, fontWeight: '800', color: C.brand700 }}>{money(preview?.total ?? cart.subtotal)}</Text></Row>
-        <Button testID="place-order" title={method === 'VNPAY' ? 'Đặt hàng & thanh toán VNPay' : 'Đặt hàng'} icon="lock-closed-outline" size="lg" loading={busy} disabled={!preview} onPress={submit} />
+        <Button testID="place-order" title={method === 'VNPAY' ? 'Đặt hàng & thanh toán VNPay' : 'Đặt hàng'} icon="lock-closed-outline" size="lg" loading={busy} disabled={!preview || !!preview.shipping?.needPin || !!preview.shipping?.outOfRange} onPress={submit} />
       </View>
     </KeyboardAvoidingView>
   );

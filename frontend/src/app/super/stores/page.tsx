@@ -8,18 +8,21 @@ import { Empty, Modal, Pagination, Spinner } from '@/components/ui';
 import { api, qs } from '@/lib/api';
 import { ROOT_DOMAIN } from '@/lib/platform';
 import { money } from '@/lib/format';
+import { AddressFields } from '@/components/AddressFields';
 import { PartnerFields, partnerPayload } from '@/components/super/PartnerFields';
+import { EMPTY_ADDRESS, toPayload } from '@/lib/vn-address';
 import { EMPTY_PARTNER, expiryInfo, METHODS, slugifyVi, STORE_STATUS, type SuperStore } from '@/lib/super';
 import type { Paged, Plan } from '@/lib/types';
 
 const EMPTY = {
-  name: '', slug: '', phone: '', email: '', address: '', note: '', planId: '', months: 1, amount: '', method: METHODS[0],
+  name: '', slug: '', phone: '', email: '', address: EMPTY_ADDRESS, note: '', planId: '', months: 1, amount: '', method: METHODS[0],
   owner: { fullName: '', email: '', password: '', phone: '' },
 };
 
 function CreateStore({ plans, onClose, onDone }: { plans: Plan[]; onClose: () => void; onDone: (s: SuperStore) => void }) {
   const toast = useToast();
-  const [f, setF] = useState({ ...EMPTY, planId: String(plans.find((p) => p.isActive)?.id ?? '') });
+  // Mặc định gói Miễn phí cho đối tác mới
+  const [f, setF] = useState({ ...EMPTY, planId: String((plans.find((p) => p.code === 'free') ?? plans.find((p) => p.isActive && p.priceMonthly === 0) ?? plans.find((p) => p.isActive))?.id ?? '') });
   const [partner, setPartner] = useState(EMPTY_PARTNER);
   const [slugTouched, setSlugTouched] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -34,7 +37,7 @@ function CreateStore({ plans, onClose, onDone }: { plans: Plan[]; onClose: () =>
       const s = await api<SuperStore>('/super/stores', {
         method: 'POST',
         json: {
-          name: f.name, slug, phone: f.phone || undefined, email: f.email || undefined, address: f.address || undefined, note: f.note || undefined,
+          name: f.name, slug, phone: f.phone || undefined, email: f.email || undefined, addressParts: toPayload(f.address), note: f.note || undefined,
           planId: f.planId ? Number(f.planId) : undefined, months: Number(f.months), amount: f.amount === '' ? undefined : Number(f.amount), method: f.method,
           owner: { ...f.owner, phone: f.owner.phone || undefined },
           ...partnerPayload(partner),
@@ -65,7 +68,7 @@ function CreateStore({ plans, onClose, onDone }: { plans: Plan[]; onClose: () =>
           <div><label className="label">Số điện thoại</label><input className="input" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
           <div><label className="label">Email liên hệ</label><input className="input" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
         </div>
-        <div><label className="label">Địa chỉ</label><input className="input" value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></div>
+        <AddressFields label="Địa chỉ cửa hàng (điểm tài xế lấy hàng)" testId="store-addr" value={f.address} onChange={(address) => setF({ ...f, address })} />
       </fieldset>
       <fieldset className="space-y-3">
         <legend className="mb-1 text-sm font-bold text-ink">3. Tài khoản quản lý cửa hàng (chủ đối tác đăng nhập)</legend>
@@ -82,10 +85,11 @@ function CreateStore({ plans, onClose, onDone }: { plans: Plan[]; onClose: () =>
         <div className="grid gap-3 sm:grid-cols-2">
           <div><label className="label">Gói</label>
             <select className="input" value={f.planId} onChange={(e) => setF({ ...f, planId: e.target.value })}>
-              <option value="">— Không gán gói —</option>
+              <option value="">— Mặc định (gói Miễn phí) —</option>
               {plans.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.priceMonthly ? `${money(p.priceMonthly)}/tháng` : 'Miễn phí'}{!p.isActive ? ' (ngừng bán)' : ''}</option>)}
             </select>
           </div>
+          {plan && plan.priceMonthly === 0 ? <p className="self-end pb-2 text-sm text-slate-500">Gói miễn phí: không thời hạn, không thu phí. Có thể mua thêm hạn mức sau khi tạo.</p> : <>
           <div><label className="label">Thời hạn</label>
             <select className="input" value={f.months} onChange={(e) => setF({ ...f, months: Number(e.target.value) })}>
               {[1, 3, 6, 12, 24].map((m) => <option key={m} value={m}>{m} tháng</option>)}
@@ -98,6 +102,7 @@ function CreateStore({ plans, onClose, onDone }: { plans: Plan[]; onClose: () =>
               <div><label className="label">Hình thức</label><select className="input" value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })}>{METHODS.map((m) => <option key={m}>{m}</option>)}</select></div>
             </>
           )}
+          </>}
         </div>
         <div><label className="label">Ghi chú nội bộ</label><textarea className="input" rows={2} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
       </fieldset>

@@ -7,7 +7,7 @@ export const PLATFORM_NAME = process.env.EXPO_PUBLIC_PLATFORM_NAME || 'Chợ T�
 
 export const FALLBACK_SETTINGS: StoreSettings = {
   storeName: PLATFORM_NAME, slogan: 'Đi chợ online tại tạp hoá gần bạn', logo: '', hotline: '', email: '', address: '', openingHours: '',
-  announcement: '', taxCode: '', vatRate: 0, invoiceFooter: '', shippingFee: 20000, freeShippingThreshold: 300000, minOrderValue: 0,
+  announcement: '', taxCode: '', invoiceFooter: '', tax: { method: 'TRUC_TIEP', defaultVatRate: '8' }, shippingMode: 'DISTANCE', shippingFee: 20000, freeShippingThreshold: 300000, minOrderValue: 0,
   deliverySlots: [], deliveryDaysAhead: 3, payment: { cod: true, bankTransfer: false, vnpay: false },
   bank: { bankBin: '', bankName: '', accountNo: '', accountName: '' }, banners: [], social: { facebook: '', zalo: '', tiktok: '', youtube: '' },
 };

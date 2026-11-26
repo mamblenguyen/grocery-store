@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { AreaPicker } from '@/components/AddressPicker';
 import { toast } from '@/components/Toast';
-import { Button, Card, Empty, Loading, Row, StatusPill, T } from '@/components/ui';
+import { Button, Card, Chip, Empty, Loading, Row, StatusPill, T } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 import { api } from '@/lib/api';
 import { money } from '@/lib/format';
@@ -11,6 +12,7 @@ import { currentPosition, DELIVERY_STATUS, VEHICLES, type LatLng } from '@/lib/g
 import type { Job, ShipperMe } from '@/lib/shipper';
 import { C, R } from '@/lib/theme';
 import { useLiveLocation } from '@/lib/use-live-location';
+import { areaPayload, type ServiceArea } from '@/lib/vn-address';
 import { JobCard } from '@/components/JobCard';
 
 /** Tab tài xế: bật nhận đơn, đơn gần, đang giao, lịch sử */
@@ -24,9 +26,11 @@ export default function DeliverTab() {
   const [busy, setBusy] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const pos = useRef<LatLng | null>(null);
+  const [scope, setScope] = useState<'area' | 'all'>('area');
+  const [areas, setAreas] = useState<ServiceArea[] | null>(null);
 
   const load = useCallback(async () => {
-    const q = pos.current ? `?lat=${pos.current.lat}&lng=${pos.current.lng}` : '';
+    const q = `?scope=${scope}` + (pos.current ? `&lat=${pos.current.lat}&lng=${pos.current.lng}` : '');
     const [m, j, a, h] = await Promise.all([
       api<ShipperMe>('/shipper/me'),
       api<Job[]>('/shipper/jobs' + q).catch(() => []),
@@ -35,7 +39,7 @@ export default function DeliverTab() {
     ]).catch(() => [null, [], { items: [] }, { items: [] }] as any);
     if (m) setMe(m);
     setJobs(j); setActive(a.items); setHistory(h.items);
-  }, []);
+  }, [scope]);
   // Làm mới khi mở tab + mỗi 20 giây khi đang trực tuyến
   useFocusEffect(useCallback(() => {
     if (user?.role !== 'SHIPPER') return;
@@ -57,6 +61,12 @@ export default function DeliverTab() {
     await api('/shipper/me', { method: 'PATCH', json: { isOnline: !online, ...loc } }).catch((e) => toast(e.message, 'error'));
     toast(online ? 'Đã tắt nhận đơn' : 'Đã bật nhận đơn');
     load();
+  };
+  const saveAreas = async () => {
+    if (!areas) return;
+    setBusy(-1);
+    try { await api('/shipper/me', { method: 'PATCH', json: { areas: areaPayload(areas) } }); toast('Đã lưu vùng hoạt động'); setAreas(null); load(); }
+    catch (e: any) { toast(e.message, 'error'); } finally { setBusy(0); }
   };
   const accept = async (j: Job) => {
     setBusy(j.id);
@@ -86,6 +96,12 @@ export default function DeliverTab() {
                 <View key={l} style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>{v}</Text><Text style={{ color: 'rgba(255,255,255,.8)', fontSize: 11 }}>{l}</Text></View>
               ))}
             </Row>
+            {(me.stats.todayFromStores > 0 || me.stats.todayToStores > 0) && (
+              <View testID="cash-summary" style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,.15)', paddingVertical: 8, alignItems: 'center', gap: 2 }}>
+                {me.stats.todayFromStores > 0 && <Text style={{ color: 'rgba(255,255,255,.9)', fontSize: 12 }}>Đã nhận từ cửa hàng: <Text style={{ fontWeight: '900', color: '#fff' }}>{money(me.stats.todayFromStores)}</Text></Text>}
+                {me.stats.todayToStores > 0 && <Text style={{ color: 'rgba(255,255,255,.9)', fontSize: 12 }}>Phải nộp lại cửa hàng: <Text style={{ fontWeight: '900', color: '#fde68a' }}>{money(me.stats.todayToStores)}</Text></Text>}
+              </View>
+            )}
           </View>
           <Row gap={4} style={{ backgroundColor: C.white, borderRadius: R.md, padding: 4 }}>
             {([['jobs', `Đơn mới${online && jobs?.length ? ` (${jobs.length})` : ''}`], ['active', `Đang giao${active?.length ? ` (${active.length})` : ''}`], ['history', 'Lịch sử']] as const).map(([k, l]) => (
@@ -94,6 +110,27 @@ export default function DeliverTab() {
               </Pressable>
             ))}
           </Row>
+          {tab === 'jobs' && (
+            <Card style={{ gap: 8 }}>
+              <Row gap={8}>
+                <Ionicons name="map-outline" size={18} color={C.brand600} />
+                <Text style={{ flex: 1, color: C.text }} numberOfLines={2}>Vùng: <Text style={st.b}>{me.profile.areas?.length ? me.profile.area : 'Mọi nơi'}</Text></Text>
+                <Button testID="edit-areas" title={areas ? 'Đóng' : 'Đổi vùng'} variant="outline" size="sm" onPress={() => setAreas(areas ? null : me.profile.areas ?? [])} />
+              </Row>
+              {!!me.profile.areas?.length && (
+                <Row gap={6}>
+                  <Chip label="Trong vùng của tôi" active={scope === 'area'} onPress={() => setScope('area')} />
+                  <Chip label="Tất cả đơn" active={scope === 'all'} onPress={() => setScope('all')} />
+                </Row>
+              )}
+              {areas && (
+                <View style={{ gap: 10 }}>
+                  <AreaPicker value={areas} onChange={setAreas} />
+                  <Button testID="save-areas" title="Lưu vùng hoạt động" icon="checkmark" loading={busy === -1} onPress={saveAreas} />
+                </View>
+              )}
+            </Card>
+          )}
           {tab === 'jobs' && !online && <Card style={{ alignItems: 'center', gap: 6 }}><Ionicons name="power" size={28} color={C.faint} /><T variant="muted" style={{ textAlign: 'center' }}>Bật nhận đơn để xem các đơn đang chờ giao gần bạn</T></Card>}
         </View>
       }

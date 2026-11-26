@@ -9,7 +9,7 @@ import { api, imageUrl } from '@/lib/api';
 import { confirmAsync } from '@/lib/confirm';
 import { money } from '@/lib/format';
 import { DELIVERY_STATUS, distanceKm, openDirections, type LatLng } from '@/lib/geo';
-import type { Job } from '@/lib/shipper';
+import { type Job, settlement } from '@/lib/shipper';
 import { C, R } from '@/lib/theme';
 import { useLiveLocation } from '@/lib/use-live-location';
 
@@ -63,6 +63,7 @@ export default function ShipperDelivery() {
     );
   };
 
+  const pay = settlement(d);
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 760, width: '100%', alignSelf: 'center' }}>
       <Stack.Screen options={{ title: `Chuyến ${d.order.code}` }} />
@@ -89,13 +90,17 @@ export default function ShipperDelivery() {
         <View style={{ borderTopWidth: 1, borderTopColor: C.line2, paddingTop: 8 }}>
           {d.codAmount > 0
             ? <Text style={{ fontWeight: '900', color: '#b45309', fontSize: 16 }}>💵 Thu của khách: {money(d.codAmount)}</Text>
-            : <Text style={{ fontWeight: '700', color: C.brand700 }}>Khách đã thanh toán – không thu tiền</Text>}
+            : <Text style={{ fontWeight: '700', color: C.brand700 }}>Khách đã thanh toán – không thu tiền của khách</Text>}
+          {pay.storePaysShipper > 0 && <Text style={{ marginTop: 6, fontWeight: '800', color: C.sky }}>🏪 Cửa hàng trả bạn {money(pay.storePaysShipper)} khi lấy hàng{d.codAmount ? ' (bù phí ship)' : ' (phí ship)'}</Text>}
+          {pay.shipperPaysStore > 0 && <Text style={{ marginTop: 6, fontWeight: '800', color: '#be123c' }}>↩ Giữ {money(d.fee)} phí ship, nộp lại cửa hàng {money(pay.shipperPaysStore)}</Text>}
+          <T variant="muted" style={{ fontSize: 12, marginTop: 4 }}>Thu nhập chuyến này {money(d.fee)} · tiền trả trực tiếp giữa bạn và cửa hàng, không qua sàn</T>
         </View>
       </Card>
 
       {d.status === 'ASSIGNED' && (
         <>
-          <Button testID="pickup" title="Đã lấy hàng tại cửa hàng" icon="checkmark-circle-outline" size="lg" loading={busy} onPress={() => act('pickup', 'Đã lấy hàng – bắt đầu giao')} />
+          <Button testID="pickup" title={pay.storePaysShipper ? `Đã lấy hàng & nhận ${money(pay.storePaysShipper)}` : 'Đã lấy hàng tại cửa hàng'} icon="checkmark-circle-outline" size="lg" loading={busy}
+            onPress={async () => { if (!pay.storePaysShipper || await confirmAsync('Đã lấy hàng?', `Nhận ${money(pay.storePaysShipper)} phí ship từ cửa hàng`, 'Đã nhận')) act('pickup', 'Đã lấy hàng – bắt đầu giao'); }} />
           <Button title="Trả đơn (chưa lấy hàng)" variant="ghost" icon="return-up-back-outline" onPress={async () => {
             if (!(await confirmAsync('Trả đơn này?', 'Đơn sẽ quay lại cho tài xế khác nhận', 'Trả đơn', true))) return;
             try { await api(`/shipper/deliveries/${id}/release`, { method: 'POST' }); toast('Đã trả đơn'); router.back(); } catch (e: any) { toast(e.message, 'error'); }
@@ -105,7 +110,7 @@ export default function ShipperDelivery() {
       {d.status === 'PICKED_UP' && !failing && (
         <>
           <Button testID="complete" title={d.codAmount ? `Đã giao & thu ${money(d.codAmount)}` : 'Đã giao thành công'} icon="checkmark-done-outline" size="lg" loading={busy}
-            onPress={async () => { if (await confirmAsync('Xác nhận đã giao?', d.codAmount ? `Đã thu ${money(d.codAmount)} của khách` : '', 'Đã giao')) act('complete', 'Giao thành công 🎉'); }} />
+            onPress={async () => { if (await confirmAsync('Xác nhận đã giao?', d.codAmount ? `Đã thu ${money(d.codAmount)} của khách. Giữ ${money(d.fee)} phí ship, nộp ${money(pay.shipperPaysStore)} cho cửa hàng.` : '', 'Đã giao')) act('complete', 'Giao thành công 🎉'); }} />
           <Button title="Giao không thành công" variant="outline" icon="close-circle-outline" onPress={() => setFailing(true)} />
         </>
       )}

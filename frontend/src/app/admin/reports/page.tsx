@@ -1,6 +1,7 @@
 'use client';
 import { DollarSign, Info, Package, Percent, ReceiptText, TrendingUp, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { BarChart } from '@/components/admin/BarChart';
 import { Spinner, StatCard } from '@/components/ui';
 import { api, qs } from '@/lib/api';
 import { money, num, PAYMENT_METHOD } from '@/lib/format';
@@ -8,7 +9,8 @@ import { money, num, PAYMENT_METHOD } from '@/lib/format';
 type Agg = { key: string; revenue: number; cogs: number; profit: number; orders: number; items: number };
 interface Report {
   range: { from: string; to: string; groupBy: 'day' | 'month' };
-  summary: { revenue: number; cogs: number; profit: number; orders: number; items: number; discount: number; shipping: number; margin: number; avgOrderValue: number; missingCost: number };
+  summary: { revenue: number; cogs: number; profit: number; orders: number; items: number; discount: number; shipping: number; margin: number; avgOrderValue: number; missingCost: number; missingVat: number };
+  byVatRate: { key: string; label: string; revenue: number; preTax: number; vat: number; items: number }[];
   series: Agg[]; byPaymentMethod: Agg[]; byChannel: Agg[]; byCategory: Agg[];
   topProducts: (Omit<Agg, 'key'> & { name: string })[];
 }
@@ -52,8 +54,9 @@ export default function ReportsPage() {
   const [active, setActive] = useState('month');
   const [r, setR] = useState<Report | null>(null);
   useEffect(() => { setR(null); api<Report>('/admin/reports/sales' + qs({ from: range[0], to: range[1] })).then(setR); }, [range]);
-  const max = r ? Math.max(1, ...r.series.map((s) => s.revenue)) : 1;
   const label = (k: string) => (r?.range.groupBy === 'month' ? `${k.slice(5)}/${k.slice(0, 4)}` : `${k.slice(8)}/${k.slice(5, 7)}`);
+  const fullLabel = (k: string) => (r?.range.groupBy === 'month' ? `Tháng ${k.slice(5)}/${k.slice(0, 4)}` : `Ngày ${k.slice(8)}/${k.slice(5, 7)}/${k.slice(0, 4)}`);
+  const pctOf = (a: number, b: number) => (b ? `${(Math.round((a / b) * 1000) / 10).toLocaleString('vi-VN')}%` : '—');
 
   return (
     <div className="space-y-5">
@@ -82,19 +85,25 @@ export default function ReportsPage() {
               <h3 className="font-bold text-ink">Doanh thu & lợi nhuận theo {r.range.groupBy === 'month' ? 'tháng' : 'ngày'}</h3>
               <div className="flex gap-4 text-xs"><span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded bg-brand-200" /> Doanh thu</span><span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded bg-brand-600" /> Lợi nhuận</span></div>
             </div>
-            <div className="overflow-x-auto">
-              <div className="flex h-64 min-w-full items-end gap-1" style={{ minWidth: r.series.length * 22 }}>
-                {r.series.map((s) => (
-                  <div key={s.key} className="group relative flex h-full min-w-[18px] flex-1 flex-col items-center justify-end">
-                    <div className="pointer-events-none absolute bottom-full z-10 mb-1 hidden rounded-lg bg-ink px-2.5 py-1.5 text-xs whitespace-nowrap text-white group-hover:block">{label(s.key)}<br />DT {money(s.revenue)}<br />LN {money(s.profit)} · {s.orders} đơn</div>
-                    <div className="relative w-full max-w-9 rounded-t-md bg-brand-200" style={{ height: `${(s.revenue / max) * 100}%`, minHeight: s.revenue ? 4 : 1 }}>
-                      <div className="absolute inset-x-0 bottom-0 rounded-t-md bg-brand-600" style={{ height: s.revenue ? `${Math.max(0, (s.profit / s.revenue) * 100)}%` : 0 }} />
-                    </div>
-                    <div className="mt-1 text-[10px] text-slate-400">{label(s.key)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <BarChart
+              data={r.series.map((x) => ({
+                key: x.key,
+                label: label(x.key),
+                bar: { value: x.revenue, className: 'bg-brand-200' },
+                overlay: { value: x.profit, className: 'bg-brand-600' },
+                tooltip: {
+                  title: fullLabel(x.key),
+                  rows: [
+                    { label: 'Doanh thu hàng', value: money(x.revenue), dot: 'bg-brand-200' },
+                    { label: 'Giá vốn', value: money(x.cogs), tone: 'muted' as const },
+                    { label: 'Lợi nhuận gộp', value: money(x.profit), tone: x.profit < 0 ? ('neg' as const) : ('pos' as const), dot: 'bg-brand-600' },
+                    { label: 'Biên lợi nhuận', value: pctOf(x.profit, x.revenue), tone: 'muted' as const },
+                    { label: 'Đơn hoàn thành', value: num(x.orders) },
+                    { label: 'Sản phẩm bán', value: num(x.items), tone: 'muted' as const },
+                  ],
+                },
+              }))}
+            />
           </div>
 
           <div className="grid gap-5 lg:grid-cols-3">
@@ -119,6 +128,35 @@ export default function ReportsPage() {
                 {!r.topProducts.length && <tr><td colSpan={7} className="py-10 text-center text-slate-400">Chưa có đơn hoàn thành trong kỳ</td></tr>}
               </tbody>
             </table>
+          </div>
+
+          <div className="card overflow-x-auto p-0">
+            <div className="p-5 pb-2">
+              <div className="font-bold text-ink">Tổng hợp thuế GTGT theo thuế suất</div>
+              <p className="text-xs text-slate-500">Giá bán đã gồm thuế → tách ngược theo thuế suất khai báo ở từng sản phẩm (snapshot tại thời điểm bán). Số liệu tham khảo để đối chiếu với hoá đơn điện tử & tờ khai – số chính thức là số trên hoá đơn điện tử đã phát hành.</p>
+            </div>
+            <table className="table">
+              <thead><tr><th>Thuế suất</th><th className="text-right">SL</th><th className="text-right">Doanh thu (gồm thuế)</th><th className="text-right">Chưa thuế</th><th className="text-right">Thuế GTGT</th></tr></thead>
+              <tbody>
+                {r.byVatRate.map((v) => (
+                  <tr key={v.key}>
+                    <td className={v.key === 'NA' ? 'text-amber-700' : 'font-medium text-ink'}>{v.label}</td>
+                    <td className="text-right">{num(v.items)}</td><td className="text-right">{money(v.revenue)}</td>
+                    <td className="text-right">{money(v.preTax)}</td><td className="text-right font-semibold">{money(v.vat)}</td>
+                  </tr>
+                ))}
+                {!!r.byVatRate.length && (
+                  <tr className="font-bold">
+                    <td>Tổng</td><td className="text-right">{num(r.byVatRate.reduce((a, v) => a + v.items, 0))}</td>
+                    <td className="text-right">{money(r.byVatRate.reduce((a, v) => a + v.revenue, 0))}</td>
+                    <td className="text-right">{money(r.byVatRate.reduce((a, v) => a + v.preTax, 0))}</td>
+                    <td className="text-right">{money(r.byVatRate.reduce((a, v) => a + v.vat, 0))}</td>
+                  </tr>
+                )}
+                {!r.byVatRate.length && <tr><td colSpan={5} className="py-8 text-center text-slate-400">Chưa có đơn hoàn thành trong kỳ</td></tr>}
+              </tbody>
+            </table>
+            {r.summary.missingVat > 0 && <div className="m-4 mt-0 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-800"><Info className="mt-0.5 h-4 w-4 shrink-0" />{r.summary.missingVat} dòng hàng chưa có thuế suất (đơn tạo trước khi khai báo thuế suất sản phẩm) – đang tính như không có thuế.</div>}
           </div>
         </>
       )}

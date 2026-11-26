@@ -1,14 +1,16 @@
-import { Body, Controller, Delete, Get, Injectable, Module, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Injectable, Module, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsNumber, IsOptional, IsString, Matches, Max, Min, MinLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, Matches, Max, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 import { Auth, CurrentUser } from '../common/decorators';
+import { AddressPartsDto, storeAddressData } from '../geo/vn-address';
 import { PrismaService } from '../prisma/prisma.service';
 
 class AddressDto {
   @IsOptional() @IsString() label?: string;
   @IsString() @MinLength(2) fullName: string;
   @IsString() @Matches(/^[0-9+\s]{9,15}$/, { message: 'Số điện thoại không hợp lệ' }) phone: string;
-  @IsString() @MinLength(5) address: string;
+  /** Bắt buộc khi thêm mới: số nhà/đường + Tỉnh/TP + Quận/Huyện + Phường/Xã (address được ghép tự động) */
+  @IsOptional() @ValidateNested() @Type(() => AddressPartsDto) addressParts?: AddressPartsDto;
   @IsOptional() @IsBoolean() isDefault?: boolean;
   /** Toạ độ ghim trên bản đồ (để tài xế tìm đúng nhà) */
   @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsNumber() @Min(-90) @Max(90) lat?: number | null;
@@ -23,7 +25,11 @@ export class AddressesService {
     return this.prisma.address.findMany({ where: { userId }, orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }] });
   }
 
-  async save(userId: number, dto: AddressDto, id?: number) {
+  async save(userId: number, input: AddressDto, id?: number) {
+    if (!id && !input.addressParts) throw new BadRequestException('Chọn đủ Tỉnh/Thành phố, Quận/Huyện, Phường/Xã và nhập số nhà, tên đường');
+    // Sửa mà không gửi addressParts (vd: chỉ đặt mặc định) → giữ nguyên địa chỉ cũ
+    const { addressParts, ...rest } = input;
+    const dto = { ...rest, ...(addressParts && storeAddressData(addressParts, 'Địa chỉ giao hàng')) } as typeof rest & { address?: string };
     return this.prisma.$transaction(async (tx) => {
       const count = await tx.address.count({ where: { userId } });
       const isDefault = dto.isDefault || count === 0 || (id === undefined ? false : undefined);
@@ -32,7 +38,7 @@ export class AddressesService {
         await tx.address.findFirstOrThrow({ where: { id, userId } });
         return tx.address.update({ where: { id }, data: { ...dto, ...(isDefault !== undefined && { isDefault }) } });
       }
-      return tx.address.create({ data: { ...dto, userId, isDefault: !!isDefault } });
+      return tx.address.create({ data: { ...dto, address: dto.address!, userId, isDefault: !!isDefault } });
     });
   }
 

@@ -1,22 +1,32 @@
 'use client';
-import { Bike, KeyRound, Plus, Search } from 'lucide-react';
+import { Bike, KeyRound, MapPinned, Pencil, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { AreaPicker } from '@/components/AreaPicker';
 import { useToast } from '@/components/Toast';
+import { promptDialog } from '@/components/PromptDialog';
 import { Empty, Modal, Pagination, Spinner } from '@/components/ui';
 import { api, qs } from '@/lib/api';
 import { date, dateTime, money } from '@/lib/format';
 import { DELIVERY_STATUS, VEHICLES } from '@/lib/geo';
 import type { Job } from '@/lib/shipper';
 import type { Paged } from '@/lib/types';
+import { areaLabel, areaPayload, type ServiceArea } from '@/lib/vn-address';
 
 interface ShipperRow {
   id: number; email: string; fullName: string; phone: string | null; isActive: boolean; createdAt: string;
-  shipperProfile: { vehicleType: string; plateNumber: string | null; idNumber: string | null; area: string | null; isOnline: boolean; locationAt: string | null } | null;
+  shipperProfile: { vehicleType: string; plateNumber: string | null; idNumber: string | null; area: string | null; areas: ServiceArea[] | null; isOnline: boolean; locationAt: string | null } | null;
   stats: { delivered: number; earnings: number; failed: number; active: number };
 }
 type DeliveryRow = Job & { shipper: { id: number; fullName: string; phone: string | null } | null };
-const EMPTY = { fullName: '', phone: '', email: '', password: '', vehicleType: 'XE_MAY', plateNumber: '', idNumber: '', area: '' };
+const EMPTY = { id: 0, fullName: '', phone: '', email: '', password: '', vehicleType: 'XE_MAY', plateNumber: '', idNumber: '', areas: [] as ServiceArea[] };
+
+/** Tóm tắt vùng hoạt động: 2 vùng đầu + số vùng còn lại */
+function AreaSummary({ areas }: { areas?: ServiceArea[] | null }) {
+  if (!areas?.length) return <span className="text-slate-400">Mọi nơi</span>;
+  const more = areas.length - 2;
+  return <span title={areas.map(areaLabel).join('\n')}>{areas.slice(0, 2).map((a) => a.wardName ?? a.districtName ?? a.provinceName).join(', ')}{more > 0 ? ` +${more}` : ''}</span>;
+}
 
 export default function ShippersPage() {
   const toast = useToast();
@@ -34,11 +44,20 @@ export default function ShippersPage() {
   const update = async (u: ShipperRow, body: Record<string, unknown>, msg: string) => {
     try { await api(`/super/shippers/${u.id}`, { method: 'PATCH', json: body }); toast(msg); load(); } catch (e: any) { toast(e.message, 'error'); }
   };
-  const create = async (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    try { await api('/super/shippers', { method: 'POST', json: { ...form, plateNumber: form!.plateNumber || undefined, idNumber: form!.idNumber || undefined, area: form!.area || undefined } }); toast('Đã thêm tài xế'); setForm(null); load(); }
-    catch (err: any) { toast(err.message, 'error'); }
+    const { id, password, email, ...rest } = form!;
+    const body = { ...rest, plateNumber: rest.plateNumber || undefined, idNumber: rest.idNumber || undefined, areas: areaPayload(rest.areas) };
+    try {
+      if (id) await api(`/super/shippers/${id}`, { method: 'PATCH', json: body });
+      else await api('/super/shippers', { method: 'POST', json: { ...body, email, password } });
+      toast(id ? 'Đã cập nhật tài xế' : 'Đã thêm tài xế'); setForm(null); load();
+    } catch (err: any) { toast(err.message, 'error'); }
   };
+  const edit = (u: ShipperRow) => setForm({
+    id: u.id, fullName: u.fullName, phone: u.phone ?? '', email: u.email, password: '', vehicleType: u.shipperProfile?.vehicleType ?? 'XE_MAY',
+    plateNumber: u.shipperProfile?.plateNumber ?? '', idNumber: u.shipperProfile?.idNumber ?? '', areas: u.shipperProfile?.areas ?? [],
+  });
 
   return (
     <div className="space-y-4">
@@ -61,12 +80,13 @@ export default function ShippersPage() {
           <div className="card overflow-x-auto p-0">
             {!data ? <Spinner /> : !data.items.length ? <Empty icon={<Bike className="h-7 w-7" />} text="Chưa có tài xế" /> : (
               <table className="table">
-                <thead><tr><th>Tài xế</th><th>Phương tiện</th><th>Trạng thái</th><th className="text-right">Đã giao</th><th className="text-right">Thu nhập</th><th className="text-right">Thất bại</th><th>Tài khoản</th><th></th></tr></thead>
+                <thead><tr><th>Tài xế</th><th>Phương tiện</th><th>Vùng hoạt động</th><th>Trạng thái</th><th className="text-right">Đã giao</th><th className="text-right">Thu nhập</th><th className="text-right">Thất bại</th><th>Tài khoản</th><th></th></tr></thead>
                 <tbody>
                   {data.items.map((u) => (
                     <tr key={u.id}>
                       <td><div className="font-medium">{u.fullName}</div><div className="text-xs text-slate-500">{u.phone} · {u.email}</div></td>
-                      <td className="text-sm">{VEHICLES[u.shipperProfile?.vehicleType ?? ''] ?? '—'}<div className="text-xs text-slate-500">{u.shipperProfile?.plateNumber}{u.shipperProfile?.area ? ` · ${u.shipperProfile.area}` : ''}</div></td>
+                      <td className="text-sm">{VEHICLES[u.shipperProfile?.vehicleType ?? ''] ?? '—'}<div className="text-xs text-slate-500">{u.shipperProfile?.plateNumber}</div></td>
+                      <td className="max-w-[220px] text-sm"><span className="inline-flex items-center gap-1"><MapPinned className="h-3.5 w-3.5 shrink-0 text-slate-400" /><AreaSummary areas={u.shipperProfile?.areas} /></span></td>
                       <td>
                         {u.stats.active > 0 ? <span className="badge bg-indigo-100 text-indigo-800">Đang giao {u.stats.active}</span>
                           : u.shipperProfile?.isOnline ? <span className="badge bg-green-100 text-green-800">● Trực tuyến</span> : <span className="badge bg-slate-100 text-slate-600">Ngoại tuyến</span>}
@@ -77,7 +97,8 @@ export default function ShippersPage() {
                       <td className="text-right">{u.stats.failed}</td>
                       <td><span className={`badge ${u.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'}`}>{u.isActive ? 'Hoạt động' : 'Đã khoá'}</span><div className="text-[11px] text-slate-400">từ {date(u.createdAt)}</div></td>
                       <td className="space-x-1 text-right whitespace-nowrap">
-                        <button className="btn-outline btn-sm" title="Đặt lại mật khẩu" onClick={() => { const p = prompt(`Mật khẩu mới cho ${u.fullName} (≥ 6 ký tự)`); if (p) update(u, { password: p }, 'Đã đặt lại mật khẩu'); }}><KeyRound className="h-3.5 w-3.5" /></button>
+                        <button className="btn-outline btn-sm" title="Sửa thông tin & vùng hoạt động" onClick={() => edit(u)} data-testid={`edit-shipper-${u.id}`}><Pencil className="h-3.5 w-3.5" /></button>
+                        <button className="btn-outline btn-sm" title="Đặt lại mật khẩu" onClick={async () => { const p = await promptDialog({ title: 'Đặt lại mật khẩu tài xế', message: u.fullName, label: 'Mật khẩu mới', type: 'password', minLength: 6, confirmText: 'Đổi mật khẩu' }); if (p) update(u, { password: p }, 'Đã đặt lại mật khẩu'); }}><KeyRound className="h-3.5 w-3.5" /></button>
                         <button className={u.isActive ? 'btn-danger btn-sm' : 'btn-primary btn-sm'} onClick={() => update(u, { isActive: !u.isActive }, u.isActive ? 'Đã khoá tài xế' : 'Đã mở khoá')}>{u.isActive ? 'Khoá' : 'Mở khoá'}</button>
                       </td>
                     </tr>
@@ -119,20 +140,22 @@ export default function ShippersPage() {
         </>
       )}
 
-      <Modal open={!!form} onClose={() => setForm(null)} title="Thêm tài xế">
+      <Modal open={!!form} onClose={() => setForm(null)} title={form?.id ? `Sửa tài xế – ${form.fullName}` : 'Thêm tài xế'} size="lg">
         {form && (
-          <form onSubmit={create} className="space-y-3">
+          <form onSubmit={save} className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div><label className="label">Họ tên *</label><input className="input" required minLength={2} value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></div>
               <div><label className="label">Số điện thoại *</label><input className="input" required minLength={9} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-              <div><label className="label">Email đăng nhập *</label><input className="input" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-              <div><label className="label">Mật khẩu *</label><input className="input" required minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
+              {!form.id && <>
+                <div><label className="label">Email đăng nhập *</label><input className="input" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+                <div><label className="label">Mật khẩu *</label><input className="input" required minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
+              </>}
               <div><label className="label">Phương tiện</label><select className="input" value={form.vehicleType} onChange={(e) => setForm({ ...form, vehicleType: e.target.value })}>{Object.entries(VEHICLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
               <div><label className="label">Biển số xe</label><input className="input" value={form.plateNumber} onChange={(e) => setForm({ ...form, plateNumber: e.target.value.toUpperCase() })} placeholder="VD: 59X1-234.56" /></div>
               <div><label className="label">Số CCCD</label><input className="input" value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value })} /></div>
-              <div><label className="label">Khu vực hoạt động</label><input className="input" value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} placeholder="VD: Quận 1, Quận 3" /></div>
             </div>
-            <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setForm(null)}>Huỷ</button><button className="btn-primary">Thêm tài xế</button></div>
+            <AreaPicker value={form.areas} onChange={(areas) => setForm({ ...form, areas })} />
+            <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setForm(null)}>Huỷ</button><button className="btn-primary">{form.id ? 'Lưu' : 'Thêm tài xế'}</button></div>
           </form>
         )}
       </Modal>

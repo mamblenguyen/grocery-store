@@ -5,11 +5,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { MapView, type MapPoint } from '@/components/map/MapView';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal, Spinner } from '@/components/ui';
 import { api, imageUrl } from '@/lib/api';
 import { dateTime, money } from '@/lib/format';
 import { DELIVERY_STATUS, directionsUrl, type LatLng } from '@/lib/geo';
-import type { Job } from '@/lib/shipper';
+import { type Job, settlement } from '@/lib/shipper';
+import { DeliveryMoney } from '@/components/DeliveryMoney';
 import { useLiveLocation } from '@/lib/use-live-location';
 
 const STEPS = ['ASSIGNED', 'PICKED_UP', 'DELIVERED'];
@@ -34,7 +36,7 @@ export default function DeliveryDetail() {
     catch (e: any) { toast(e.message, 'error'); } finally { setBusy(false); }
   };
   const release = async () => {
-    if (!confirm('Trả đơn này cho tài xế khác?')) return;
+    if (!(await confirmDialog('Trả đơn này cho tài xế khác?', 'Đơn sẽ quay lại danh sách để tài xế khác nhận.', 'Trả đơn', true))) return;
     try { await api(`/shipper/deliveries/${id}/release`, { method: 'POST' }); toast('Đã trả đơn'); router.push('/shipper'); }
     catch (e: any) { toast(e.message, 'error'); }
   };
@@ -110,29 +112,30 @@ export default function DeliveryDetail() {
             <b>×{i.quantity}</b>
           </div>
         ))}
-        <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+        <div className="space-y-2 border-t border-slate-100 pt-3">
           {d.codAmount > 0
-            ? <span className="flex items-center gap-2 font-bold text-amber-700"><Banknote className="h-5 w-5" />Thu của khách: {money(d.codAmount)}</span>
-            : <span className="font-semibold text-green-700">Khách đã thanh toán – không thu tiền</span>}
-          <span className="text-sm text-slate-500">Bạn nhận <b className="text-brand-700">{money(d.fee)}</b></span>
+            ? <div className="flex items-center gap-2 font-bold text-amber-700"><Banknote className="h-5 w-5" />Thu của khách: {money(d.codAmount)}</div>
+            : <div className="font-semibold text-green-700">Khách đã thanh toán – không thu tiền của khách</div>}
+          <h4 className="pt-1 text-sm font-bold text-ink">Tiền chuyến này</h4>
+          <DeliveryMoney fee={d.fee} codAmount={d.codAmount} viewer="shipper" />
         </div>
       </div>
 
       {d.status === 'ASSIGNED' && (
         <div className="space-y-2">
-          <button className="btn-primary btn-lg w-full" disabled={busy} onClick={() => act('pickup', 'Đã lấy hàng – bắt đầu giao')} data-testid="pickup"><CheckCircle2 className="h-5 w-5" /> Đã lấy hàng tại cửa hàng</button>
+          <button className="btn-primary btn-lg w-full" disabled={busy} onClick={async () => { const p = settlement(d); if (!p.storePaysShipper || await confirmDialog('Đã lấy hàng?', `Nhận ${money(p.storePaysShipper)} phí ship từ cửa hàng khi lấy hàng.`, 'Đã lấy hàng & nhận tiền')) act('pickup', 'Đã lấy hàng – bắt đầu giao'); }} data-testid="pickup"><CheckCircle2 className="h-5 w-5" /> {settlement(d).storePaysShipper ? `Đã lấy hàng & nhận ${money(settlement(d).storePaysShipper)}` : 'Đã lấy hàng tại cửa hàng'}</button>
           <button className="btn-ghost w-full text-slate-500" onClick={release}><Undo2 className="h-4 w-4" /> Trả đơn (chưa lấy hàng)</button>
         </div>
       )}
       {d.status === 'PICKED_UP' && (
         <div className="space-y-2">
-          <button className="btn-primary btn-lg w-full" disabled={busy} onClick={() => confirm(d.codAmount ? `Xác nhận đã giao và đã thu ${money(d.codAmount)}?` : 'Xác nhận đã giao cho khách?') && act('complete', 'Giao thành công 🎉')} data-testid="complete">
+          <button className="btn-primary btn-lg w-full" disabled={busy} onClick={async () => { if (await confirmDialog('Xác nhận giao thành công?', d.codAmount ? `Bạn xác nhận đã giao hàng và thu ${money(d.codAmount)} của khách. Giữ lại ${money(d.fee)} phí ship, nhớ nộp ${money(settlement(d).shipperPaysStore)} cho cửa hàng.` : 'Bạn xác nhận khách đã nhận hàng.', 'Đã giao')) act('complete', 'Giao thành công 🎉'); }} data-testid="complete">
             <CheckCircle2 className="h-5 w-5" /> {d.codAmount ? `Đã giao & thu ${money(d.codAmount)}` : 'Đã giao thành công'}
           </button>
           <button className="btn-outline w-full text-red-600" onClick={() => setFailing(true)}><XCircle className="h-4 w-4" /> Giao không thành công</button>
         </div>
       )}
-      {d.status === 'DELIVERED' && <div className="card text-center text-green-700"><CheckCircle2 className="mx-auto h-8 w-8" />Đã giao lúc {dateTime(d.deliveredAt!)}</div>}
+      {d.status === 'DELIVERED' && <div className="card text-center text-green-700"><CheckCircle2 className="mx-auto h-8 w-8" />Đã giao lúc {dateTime(d.deliveredAt!)}{settlement(d).shipperPaysStore > 0 && <div className="mt-1 text-sm font-semibold text-rose-700">Nhớ nộp {money(settlement(d).shipperPaysStore)} cho {d.store.name}</div>}</div>}
       {d.status === 'FAILED' && <div className="card text-center text-red-600">Giao không thành công: {d.failReason}. Vui lòng mang hàng trả lại cửa hàng.</div>}
 
       <Modal open={failing} onClose={() => setFailing(false)} title="Giao không thành công">

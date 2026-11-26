@@ -3,6 +3,7 @@ import { Building2, Pencil, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Empty, Modal, Spinner } from '@/components/ui';
 import { api } from '@/lib/api';
 import type { Supplier } from '@/lib/types';
@@ -50,7 +51,7 @@ export default function SuppliersPage() {
                   <td><span className={`badge ${s.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>{s.isActive ? 'Hoạt động' : 'Ngừng'}</span></td>
                   <td className="text-right whitespace-nowrap">
                     <button className="btn-icon btn-ghost h-8 w-8" onClick={() => { setEditing(s); setForm({ ...empty, ...Object.fromEntries(Object.entries(s).filter(([k]) => k in empty).map(([k, v]) => [k, v ?? ''])) } as typeof empty); setOpen(true); }}><Pencil className="h-4 w-4" /></button>
-                    <button className="btn-icon btn-ghost h-8 w-8 text-red-500" onClick={async () => { if (confirm(`Xoá "${s.name}"? (NCC đã có phiếu sẽ chỉ bị ngừng hoạt động)`)) { await api(`/admin/suppliers/${s.id}`, { method: 'DELETE' }); load(); } }}><Trash2 className="h-4 w-4" /></button>
+                    <button className="btn-icon btn-ghost h-8 w-8 text-red-500" aria-label="Xoá nhà cung cấp" onClick={async () => { if (await confirmDialog(`Xoá "${s.name}"?`, 'Nhà cung cấp đã có phiếu sẽ chỉ bị ngừng hoạt động.', 'Xác nhận', true)) { await api(`/admin/suppliers/${s.id}`, { method: 'DELETE' }); load(); } }}><Trash2 className="h-4 w-4" /></button>
                   </td>
                 </tr>
               ))}

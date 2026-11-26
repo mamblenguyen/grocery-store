@@ -39,6 +39,13 @@
 @utility container-x {
   @apply mx-auto w-full max-w-7xl px-4 sm:px-6;
 }
+/* Ẩn thanh cuộn nhưng vẫn cuộn được (carousel) */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
 
 @layer components {
   .btn-primary { @apply btn bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700; }

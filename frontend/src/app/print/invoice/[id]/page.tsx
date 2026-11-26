@@ -9,21 +9,32 @@ import { useSettings } from '@/context/settings';
 import { api, imageUrl } from '@/lib/api';
 import { dateOnly, num, PAYMENT_METHOD, vietQrUrl } from '@/lib/format';
 import { numberToVietnameseWords } from '@/lib/number-to-words';
-import type { Order, StoreSettings } from '@/lib/types';
+import type { EInvoice, Order, StoreSettings } from '@/lib/types';
+import { vatBreakdown, vatShort } from '@/lib/vat';
 
 const PAY_STATUS: Record<string, string> = { PAID: 'ĐÃ THANH TOÁN', UNPAID: 'CHƯA THANH TOÁN', REFUNDED: 'ĐÃ HOÀN TIỀN' };
 const fmtDate = (d: string) => { const x = new Date(d); return `Ngày ${String(x.getDate()).padStart(2, '0')} tháng ${String(x.getMonth() + 1).padStart(2, '0')} năm ${x.getFullYear()}`; };
 const fmtDT = (d: string) => new Date(d).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
 
-/** Tách VAT từ giá đã gồm thuế */
-function vatSplit(total: number, rate: number) {
-  if (!rate) return null;
-  const pre = Math.round((total * 100) / (100 + rate));
-  return { pre, vat: total - pre };
+/** Chỉ tách thuế GTGT trên phiếu khi cửa hàng nộp thuế theo phương pháp khấu trừ (HKD / PP trực tiếp không ghi thuế suất) */
+const taxOf = (o: Order, s: StoreSettings) =>
+  s.tax?.method === 'KHAU_TRU' && o.items?.length ? vatBreakdown(o.items, o.subtotal, o.discount, s.tax.defaultVatRate) : null;
+
+/** Thông tin hoá đơn điện tử đã phát hành cho đơn (để khách tra cứu bản hoá đơn hợp lệ) */
+function EInvoiceInfo({ e, compact }: { e?: EInvoice | null; compact?: boolean }) {
+  if (!e || e.status !== 'ISSUED') return null;
+  return (
+    <div className={compact ? 'text-[10.5px]' : 'mt-3 border border-black p-2 text-[11.5px]'}>
+      <b>Hoá đơn điện tử:</b> Mẫu số {e.templateCode} – Ký hiệu {e.series} – Số {e.number}
+      {e.taxAuthorityCode && <> – Mã CQT: {e.taxAuthorityCode}</>}
+      {e.lookupCode && <><br />Mã tra cứu: <b>{e.lookupCode}</b></>}{e.lookupUrl && <> tại {e.lookupUrl}</>}
+    </div>
+  );
 }
 
 function A4({ o, s, qr }: { o: Order; s: StoreSettings; qr: string }) {
-  const vat = vatSplit(o.total, s.vatRate);
+  const tax = taxOf(o, s);
+  const span = tax ? 7 : 6;
   const unpaidTransfer = o.paymentStatus === 'UNPAID' && o.paymentMethod === 'BANK_TRANSFER' && o.status !== 'CANCELLED' && s.bank.accountNo;
   return (
     <div className="p-[14mm] text-[12.5px] leading-relaxed">
@@ -43,7 +54,7 @@ function A4({ o, s, qr }: { o: Order; s: StoreSettings; qr: string }) {
       </div>
 
       <div className="my-5 text-center">
-        <div className="text-2xl font-extrabold tracking-wide">HOÁ ĐƠN BÁN HÀNG</div>
+        <div className="text-2xl font-extrabold tracking-wide">PHIẾU THANH TOÁN</div>
         <div className="italic">{fmtDate(o.createdAt)}</div>
         <div>Số: <b>{o.code}</b></div>
       </div>
@@ -57,7 +68,7 @@ function A4({ o, s, qr }: { o: Order; s: StoreSettings; qr: string }) {
 
       <table className="w-full border-collapse [&_td]:border [&_td]:border-black [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:border-black [&_th]:px-2 [&_th]:py-1.5">
         <thead className="bg-slate-100 print:bg-slate-100">
-          <tr><th className="w-10">STT</th><th className="text-left">Tên hàng hoá</th><th className="w-24">Mã hàng</th><th className="w-14">SL</th><th className="w-28 text-right">Đơn giá</th><th className="w-32 text-right">Thành tiền</th></tr>
+          <tr><th className="w-10">STT</th><th className="text-left">Tên hàng hoá</th><th className="w-24">Mã hàng</th><th className="w-14">ĐVT</th><th className="w-14">SL</th>{tax && <th className="w-14">Thuế suất</th>}<th className="w-28 text-right">Đơn giá</th><th className="w-32 text-right">Thành tiền</th></tr>
         </thead>
         <tbody>
           {o.items?.map((i, idx) => (
@@ -65,21 +76,23 @@ function A4({ o, s, qr }: { o: Order; s: StoreSettings; qr: string }) {
               <td className="text-center">{idx + 1}</td>
               <td>{i.productName}<div className="text-[11px] text-slate-600">{i.variantName}</div></td>
               <td className="text-center font-mono text-[11px]">{i.sku}</td>
+              <td className="text-center">{i.unit || ''}</td>
               <td className="text-center">{i.quantity}</td>
+              {tax && <td className="text-center">{vatShort(i.vatRate ?? s.tax.defaultVatRate)}</td>}
               <td className="text-right">{num(i.price)}</td>
               <td className="text-right">{num(i.total)}</td>
             </tr>
           ))}
-          <tr><td colSpan={5} className="text-right">Cộng tiền hàng</td><td className="text-right">{num(o.subtotal)}</td></tr>
-          {o.discount > 0 && <tr><td colSpan={5} className="text-right">Chiết khấu / giảm giá {o.couponCode && `(${o.couponCode})`}</td><td className="text-right">-{num(o.discount)}</td></tr>}
-          {o.shippingFee > 0 && <tr><td colSpan={5} className="text-right">Phí vận chuyển</td><td className="text-right">{num(o.shippingFee)}</td></tr>}
-          <tr className="font-bold"><td colSpan={5} className="text-right text-[14px]">TỔNG TIỀN THANH TOÁN</td><td className="text-right text-[14px]">{num(o.total)}</td></tr>
-          {vat && (
-            <>
-              <tr className="text-[11.5px]"><td colSpan={5} className="text-right italic">Trong đó: Tiền hàng chưa thuế GTGT</td><td className="text-right">{num(vat.pre)}</td></tr>
-              <tr className="text-[11.5px]"><td colSpan={5} className="text-right italic">Thuế GTGT ({s.vatRate}%)</td><td className="text-right">{num(vat.vat)}</td></tr>
-            </>
-          )}
+          <tr><td colSpan={span} className="text-right">Cộng tiền hàng</td><td className="text-right">{num(o.subtotal)}</td></tr>
+          {o.discount > 0 && <tr><td colSpan={span} className="text-right">Chiết khấu / giảm giá {o.couponCode && `(${o.couponCode})`}</td><td className="text-right">-{num(o.discount)}</td></tr>}
+          {o.shippingFee > 0 && <tr><td colSpan={span} className="text-right">Phí vận chuyển</td><td className="text-right">{num(o.shippingFee)}</td></tr>}
+          <tr className="font-bold"><td colSpan={span} className="text-right text-[14px]">TỔNG TIỀN THANH TOÁN</td><td className="text-right text-[14px]">{num(o.total)}</td></tr>
+          {tax && tax.rows.map((r) => (
+            <tr key={r.rate} className="text-[11.5px]">
+              <td colSpan={span} className="text-right italic">Trong đó hàng thuế suất {vatShort(r.rate)}: chưa thuế {num(r.preTax)} · tiền thuế GTGT</td>
+              <td className="text-right">{num(r.vat)}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
       <p className="mt-2">Số tiền viết bằng chữ: <b className="italic">{numberToVietnameseWords(o.total)}.</b></p>
@@ -98,14 +111,17 @@ function A4({ o, s, qr }: { o: Order; s: StoreSettings; qr: string }) {
         <div><b>NGƯỜI MUA HÀNG</b><div className="italic">(Ký, ghi rõ họ tên)</div><div className="h-20" />{o.customerName !== 'Khách lẻ' && o.customerName}</div>
         <div><b>NGƯỜI BÁN HÀNG</b><div className="italic">(Ký, ghi rõ họ tên)</div><div className="h-20" />{o.createdBy?.fullName}</div>
       </div>
+      <EInvoiceInfo e={o.einvoice} />
       {s.invoiceFooter && <p className="mt-6 border-t border-black pt-2 text-center text-[11.5px] italic">{s.invoiceFooter}</p>}
-      <p className="mt-1 text-center text-[10px] text-slate-500">Hoá đơn bán lẻ (không thay thế hoá đơn GTGT điện tử). In lúc {fmtDT(new Date().toISOString())}</p>
+      <p className="mt-1 text-center text-[10px] text-slate-500">
+        Phiếu thanh toán – không phải hoá đơn. {o.einvoice?.status === 'ISSUED' ? 'Hoá đơn điện tử của đơn hàng tra cứu theo thông tin bên trên.' : 'Quý khách cần hoá đơn điện tử vui lòng yêu cầu khi mua hàng.'} In lúc {fmtDT(new Date().toISOString())}
+      </p>
     </div>
   );
 }
 
 function K80({ o, s, qr }: { o: Order; s: StoreSettings; qr: string }) {
-  const vat = vatSplit(o.total, s.vatRate);
+  const tax = taxOf(o, s);
   const line = <div className="my-1.5 border-t border-dashed border-black" />;
   return (
     <div className="px-[3mm] py-[4mm] font-mono text-[11.5px] leading-snug">
@@ -116,7 +132,7 @@ function K80({ o, s, qr }: { o: Order; s: StoreSettings; qr: string }) {
         {s.taxCode && <div>MST: {s.taxCode}</div>}
       </div>
       {line}
-      <div className="text-center text-[13px] font-bold">HOÁ ĐƠN BÁN LẺ</div>
+      <div className="text-center text-[13px] font-bold">PHIẾU TÍNH TIỀN</div>
       <div className="flex justify-between"><span>Số: {o.code}</span></div>
       <div>{fmtDT(o.createdAt)}</div>
       {o.createdBy && <div>Thu ngân: {o.createdBy.fullName}</div>}
@@ -124,7 +140,7 @@ function K80({ o, s, qr }: { o: Order; s: StoreSettings; qr: string }) {
       {line}
       {o.items?.map((i) => (
         <div key={i.id} className="mb-1">
-          <div>{i.productName} {i.variantName !== 'Mặc định' && `(${i.variantName})`}</div>
+          <div>{i.productName} {i.variantName !== 'Mặc định' && `(${i.variantName})`}{tax && ` [${vatShort(i.vatRate ?? s.tax.defaultVatRate)}]`}</div>
           <div className="flex justify-between"><span>{i.quantity} x {num(i.price)}</span><span>{num(i.total)}</span></div>
         </div>
       ))}
@@ -133,7 +149,7 @@ function K80({ o, s, qr }: { o: Order; s: StoreSettings; qr: string }) {
       {o.discount > 0 && <div className="flex justify-between"><span>Giảm giá</span><span>-{num(o.discount)}</span></div>}
       {o.shippingFee > 0 && <div className="flex justify-between"><span>Phí ship</span><span>{num(o.shippingFee)}</span></div>}
       <div className="flex justify-between text-[14px] font-extrabold"><span>TỔNG CỘNG</span><span>{num(o.total)}</span></div>
-      {vat && <div className="flex justify-between text-[10.5px]"><span>(Đã gồm VAT {s.vatRate}%)</span><span>{num(vat.vat)}</span></div>}
+      {tax && tax.rows.filter((r) => r.vat).map((r) => <div key={r.rate} className="flex justify-between text-[10.5px]"><span>(Gồm thuế GTGT {vatShort(r.rate)})</span><span>{num(r.vat)}</span></div>)}
       {o.paymentMethod === 'CASH' && o.cashReceived != null && (
         <>
           <div className="flex justify-between"><span>Khách đưa</span><span>{num(o.cashReceived)}</span></div>
@@ -146,6 +162,8 @@ function K80({ o, s, qr }: { o: Order; s: StoreSettings; qr: string }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {qr && <img src={qr} alt="" className="mx-auto h-20 w-20" />}
         <div className="mt-1 text-[10.5px]">{s.invoiceFooter || 'Cảm ơn quý khách!'}</div>
+        <EInvoiceInfo e={o.einvoice} compact />
+        <div className="text-[9.5px]">Phiếu tính tiền – không phải hoá đơn</div>
       </div>
     </div>
   );

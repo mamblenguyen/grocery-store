@@ -4,6 +4,7 @@ import { Eye, EyeOff, MessageSquare, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Empty, Pagination, Spinner, Stars } from '@/components/ui';
 import { api, imageUrl, qs } from '@/lib/api';
 import { dateTime } from '@/lib/format';
@@ -39,7 +40,7 @@ export default function ReviewsAdminPage() {
                 </div>
                 <div className="flex shrink-0 gap-1">
                   <button className="btn-outline btn-sm" onClick={() => act(() => api(`/admin/reviews/${r.id}`, { method: 'PATCH', json: { isVisible: !r.isVisible } }), r.isVisible ? 'Đã ẩn đánh giá' : 'Đã hiện đánh giá')}>{r.isVisible ? <><EyeOff className="h-3.5 w-3.5" /> Ẩn</> : <><Eye className="h-3.5 w-3.5" /> Hiện</>}</button>
-                  <button className="btn-icon btn-ghost h-8 w-8 text-red-500" onClick={() => confirm('Xoá đánh giá?') && act(() => api(`/admin/reviews/${r.id}`, { method: 'DELETE' }), 'Đã xoá')}><Trash2 className="h-4 w-4" /></button>
+                  <button className="btn-icon btn-ghost h-8 w-8 text-red-500" onClick={async () => { if (await confirmDialog('Xoá đánh giá?', 'Đánh giá sẽ bị xoá vĩnh viễn.', 'Xoá', true)) act(() => api(`/admin/reviews/${r.id}`, { method: 'DELETE' }), 'Đã xoá'); }} aria-label="Xoá đánh giá"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
             ))}

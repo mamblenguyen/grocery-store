@@ -1,8 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role, StoreStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { defaultPlan } from '../common/plan-limits';
 import { clearStoreCache } from '../common/tenant.middleware';
 import { paged, paginate, slugify } from '../common/utils';
+import { AddressPartsDto, businessAddressData, STORE_ADDRESS_SELECT, storeAddressData } from '../geo/vn-address';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 
@@ -18,6 +20,7 @@ export const addMonths = (d: Date, m: number) => {
 
 const storeListSelect = {
   id: true, slug: true, name: true, businessName: true, representative: true, phone: true, email: true, address: true, logo: true, status: true,
+  ...STORE_ADDRESS_SELECT,
   planId: true, planExpiresAt: true, note: true, createdAt: true,
   plan: { select: { id: true, code: true, name: true, priceMonthly: true, maxProducts: true, maxStaff: true } },
   _count: { select: { products: true, orders: true, members: true } },
@@ -30,17 +33,22 @@ export const PARTNER_FIELDS = [
   'businessName', 'businessType', 'taxCode', 'businessAddress', 'representative', 'representativeId', 'representativePhone',
   'bankName', 'bankAccountNo', 'bankAccountName', 'contractNo',
 ] as const;
-export type PartnerInfo = Partial<Record<(typeof PARTNER_FIELDS)[number], string | null>> & { contractSignedAt?: string | null };
+export type PartnerInfo = Partial<Record<Exclude<(typeof PARTNER_FIELDS)[number], 'businessAddress'>, string | null>> & {
+  contractSignedAt?: string | null;
+  /** Địa chỉ đăng ký kinh doanh đủ Tỉnh/Huyện/Xã (businessAddress được ghép tự động) */
+  businessAddressParts?: AddressPartsDto | null;
+};
 
 function partnerData(dto: PartnerInfo) {
   const out: Record<string, unknown> = {};
-  for (const k of PARTNER_FIELDS) if (dto[k] !== undefined) out[k] = dto[k] === '' ? null : dto[k]?.trim();
+  for (const k of PARTNER_FIELDS) if (k !== 'businessAddress' && dto[k] !== undefined) out[k] = dto[k] === '' ? null : dto[k]?.trim();
+  if (dto.businessAddressParts !== undefined) Object.assign(out, businessAddressData(dto.businessAddressParts));
   if (dto.contractSignedAt !== undefined) out.contractSignedAt = dto.contractSignedAt ? new Date(dto.contractSignedAt) : null;
   return out;
 }
 
 export interface CreateStoreInput extends PartnerInfo {
-  name: string; slug?: string; phone?: string; email?: string; address?: string; note?: string;
+  name: string; slug?: string; phone?: string; email?: string; addressParts: AddressPartsDto; note?: string;
   planId?: number; months?: number; amount?: number; method?: string;
   owner: { email: string; password?: string; fullName: string; phone?: string };
 }
@@ -165,8 +173,9 @@ export class SuperService {
 
   async createStore(dto: CreateStoreInput, actorId: number) {
     const slug = await this.uniqueSlug(dto.slug || dto.name);
-    const plan = dto.planId ? await this.plan(dto.planId) : null;
-    const months = Math.max(0, Math.floor(dto.months ?? 1));
+    // Không chọn gói → gói Miễn phí mặc định. Gói 0đ: không thời hạn.
+    const plan = dto.planId ? await this.plan(dto.planId) : await defaultPlan(this.prisma);
+    const months = plan && plan.priceMonthly === 0 ? 0 : Math.max(0, Math.floor(dto.months ?? 1));
     const email = dto.owner.email.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing && (existing.role !== 'CUSTOMER' || existing.storeId))
@@ -181,7 +190,7 @@ export class SuperService {
     const store = await this.prisma.$transaction(async (tx) => {
       const store = await tx.store.create({
         data: {
-          slug, name: dto.name.trim(), phone: dto.phone, email: dto.email, address: dto.address, note: dto.note,
+          slug, name: dto.name.trim(), phone: dto.phone, email: dto.email, note: dto.note, ...storeAddressData(dto.addressParts),
           planId: plan?.id, planExpiresAt: expires, ...partnerData(dto),
         },
       });
@@ -206,7 +215,7 @@ export class SuperService {
       where: { id },
       select: {
         ...storeListSelect,
-        ...Object.fromEntries([...PARTNER_FIELDS, 'contractSignedAt', 'lat', 'lng'].map((k) => [k, true])),
+        ...Object.fromEntries([...PARTNER_FIELDS, 'businessAddressParts', 'contractSignedAt', 'lat', 'lng'].map((k) => [k, true])),
         members: { select: memberSelect, orderBy: [{ role: 'asc' }, { createdAt: 'asc' }] },
         payments: { orderBy: { createdAt: 'desc' }, take: 50, include: { plan: { select: { name: true } }, createdBy: { select: { fullName: true } } } },
       },
@@ -229,7 +238,7 @@ export class SuperService {
   }
 
   async updateStore(id: number, dto: PartnerInfo & {
-    name?: string; slug?: string; phone?: string; email?: string; address?: string; logo?: string; note?: string;
+    name?: string; slug?: string; phone?: string; email?: string; addressParts?: AddressPartsDto | null; logo?: string; note?: string;
     status?: StoreStatus; planId?: number | null; planExpiresAt?: string | null; lat?: number | null; lng?: number | null;
   }) {
     const old = await this.prisma.store.findUnique({ where: { id } });
@@ -239,18 +248,22 @@ export class SuperService {
     const store = await this.prisma.store.update({
       where: { id },
       data: {
-        name: dto.name?.trim() || undefined, slug, phone: dto.phone, email: dto.email, address: dto.address, logo: dto.logo, note: dto.note,
+        name: dto.name?.trim() || undefined, slug, phone: dto.phone, email: dto.email, logo: dto.logo, note: dto.note,
+        ...(dto.addressParts !== undefined && storeAddressData(dto.addressParts)),
         status: dto.status, ...partnerData(dto),
         ...(dto.lat !== undefined && { lat: dto.lat }), ...(dto.lng !== undefined && { lng: dto.lng }),
         ...(dto.planId !== undefined && { planId: dto.planId }),
         ...(dto.planExpiresAt !== undefined && { planExpiresAt: dto.planExpiresAt ? new Date(dto.planExpiresAt) : null }),
       },
     });
-    // Tên cửa hàng trong cài đặt riêng (nếu đã lưu) cũng đổi theo
-    if (dto.name) {
+    // Tên & địa chỉ trong cài đặt riêng của cửa hàng (nếu đã lưu) cũng đổi theo
+    if (dto.name || dto.addressParts !== undefined) {
       const row = await this.prisma.setting.findUnique({ where: { storeId_key: { storeId: id, key: 'store' } } });
       if (row?.value && typeof row.value === 'object')
-        await this.prisma.setting.update({ where: { storeId_key: { storeId: id, key: 'store' } }, data: { value: { ...(row.value as object), storeName: store.name } } });
+        await this.prisma.setting.update({
+          where: { storeId_key: { storeId: id, key: 'store' } },
+          data: { value: { ...(row.value as object), ...(dto.name && { storeName: store.name }), ...(dto.addressParts !== undefined && { address: store.address ?? '' }) } },
+        });
     }
     clearStoreCache(old.slug);
     clearStoreCache(store.slug);
@@ -258,14 +271,19 @@ export class SuperService {
     return this.storeDetail(id);
   }
 
-  /** Gia hạn: cộng thêm tháng từ max(hôm nay, ngày hết hạn hiện tại) */
+  /** Gia hạn / đổi gói: cộng thêm tháng từ max(hôm nay, ngày hết hạn hiện tại). Chuyển sang gói 0đ → không thời hạn. */
   async renew(id: number, dto: { months: number; planId?: number; amount?: number; method?: string; note?: string }, actorId: number) {
     const store = await this.prisma.store.findUnique({ where: { id } });
     if (!store) throw new NotFoundException('Không tìm thấy cửa hàng');
-    const months = Math.floor(dto.months);
-    if (!(months >= 1 && months <= 60)) throw new BadRequestException('Số tháng gia hạn từ 1 đến 60');
     const planId = dto.planId ?? store.planId;
     const plan = planId ? await this.plan(planId) : null;
+    if (plan && plan.priceMonthly === 0 && !dto.amount) {
+      await this.prisma.store.update({ where: { id }, data: { planId: plan.id, planExpiresAt: null } });
+      clearStoreCache(store.slug);
+      return this.storeDetail(id);
+    }
+    const months = Math.floor(dto.months);
+    if (!(months >= 1 && months <= 60)) throw new BadRequestException('Số tháng gia hạn từ 1 đến 60');
     const now = new Date();
     const from = store.planExpiresAt && store.planExpiresAt > now ? store.planExpiresAt : now;
     const to = addMonths(from, months);
@@ -344,10 +362,12 @@ export class SuperService {
   }
 
   // ───────────── Người dùng toàn nền tảng ─────────────
-  async users(q: { page?: number; limit?: number; search?: string; role?: Role }) {
+  async users(q: { page?: number; limit?: number; search?: string; role?: Role; kind?: 'customers' | 'users' }) {
     const { skip, take, page, limit } = paginate(q.page, q.limit);
     const where: Prisma.UserWhereInput = {
       ...(q.role && { role: q.role }),
+      ...(q.kind === 'customers' && { role: Role.CUSTOMER }),
+      ...(q.kind === 'users' && { role: { not: Role.CUSTOMER } }),
       ...(q.search && { OR: [{ email: { contains: q.search } }, { fullName: { contains: q.search } }, { phone: { contains: q.search } }] }),
     };
     const [items, total] = await Promise.all([

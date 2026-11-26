@@ -2,6 +2,7 @@
 import { KeyRound, Plus, UserMinus, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Empty, Modal, Spinner } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 import { api } from '@/lib/api';
@@ -35,7 +36,7 @@ export default function StaffPage() {
   };
 
   const remove = async (u: Member) => {
-    if (!confirm(`Gỡ ${u.fullName} khỏi cửa hàng? Tài khoản sẽ trở thành khách hàng thường, lịch sử bán hàng vẫn được giữ.`)) return;
+    if (!(await confirmDialog(`Gỡ ${u.fullName} khỏi cửa hàng?`, 'Tài khoản sẽ trở thành khách hàng thường, lịch sử bán hàng vẫn được giữ.', 'Gỡ nhân viên', true))) return;
     try { await api(`/admin/staff/${u.id}`, { method: 'DELETE' }); toast('Đã gỡ khỏi cửa hàng'); load(); }
     catch (e: any) { toast(e.message, 'error'); }
   };
@@ -93,7 +94,7 @@ export default function StaffPage() {
               <div><label className="label">Số điện thoại</label><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div><label className="label">Mật khẩu *</label><input className="input" type="text" required minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Tối thiểu 6 ký tự" /></div>
+              <div><label className="label">Mật khẩu *</label><input className="input" type="password" autoComplete="new-password" required minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Tối thiểu 6 ký tự" /></div>
               <div><label className="label">Vai trò</label>
                 <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as 'STAFF' })}>
                   <option value="STAFF">Nhân viên bán hàng / kho</option>

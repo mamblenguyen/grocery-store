@@ -2,10 +2,11 @@ import { Body, Controller, Delete, Get, Module, Param, ParseIntPipe, Patch, Post
 import { Role, StoreStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
-  IsBoolean, IsDateString, IsNumber, IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min, MinLength, ValidateIf, ValidateNested,
+  IsArray, IsBoolean, IsDateString, IsNumber, IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min, MinLength, ValidateIf, ValidateNested,
 } from 'class-validator';
 import { CurrentUser, SuperOnly } from '../common/decorators';
 import { PaginationDto } from '../common/pagination.dto';
+import { AddressPartsDto } from '../geo/vn-address';
 import { SuperService } from './super.service';
 
 class PlanDto {
@@ -15,6 +16,10 @@ class PlanDto {
   @Type(() => Number) @IsInt() @Min(0) priceMonthly: number;
   @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() @Min(1) maxProducts?: number | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() @Min(0) maxStaff?: number | null;
+  @IsArray() @IsString({ each: true }) features: string[];
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() @Min(1) maxOrdersMonthly?: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() @Min(1) maxCampaignsMonthly?: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() @Min(1) auditRetentionDays?: number | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
   @IsOptional() @Type(() => Number) @IsInt() sortOrder?: number;
 }
@@ -26,6 +31,10 @@ class UpdatePlanDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) priceMonthly?: number;
   @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() @Min(1) maxProducts?: number | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() @Min(0) maxStaff?: number | null;
+  @IsOptional() @IsArray() @IsString({ each: true }) features?: string[];
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() @Min(1) maxOrdersMonthly?: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() @Min(1) maxCampaignsMonthly?: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() @Min(1) auditRetentionDays?: number | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
   @IsOptional() @Type(() => Number) @IsInt() sortOrder?: number;
 }
@@ -42,7 +51,8 @@ class CreateStoreDto {
   @IsOptional() @IsString() slug?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() email?: string;
-  @IsOptional() @IsString() address?: string;
+  /** Địa chỉ cửa hàng bắt buộc đủ Tỉnh/TP – Quận/Huyện – Phường/Xã (address được ghép tự động) */
+  @ValidateNested() @Type(() => AddressPartsDto) addressParts: AddressPartsDto;
   @IsOptional() @IsString() note?: string;
   @IsOptional() @Type(() => Number) @IsInt() planId?: number;
   /** 0 = không thời hạn */
@@ -53,7 +63,7 @@ class CreateStoreDto {
   @IsOptional() @IsString() businessName?: string;
   @IsOptional() @IsIn(['HKD', 'CONG_TY', 'CA_NHAN', '']) businessType?: string;
   @IsOptional() @IsString() taxCode?: string;
-  @IsOptional() @IsString() businessAddress?: string;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @ValidateNested() @Type(() => AddressPartsDto) businessAddressParts?: AddressPartsDto | null;
   @IsOptional() @IsString() representative?: string;
   @IsOptional() @IsString() representativeId?: string;
   @IsOptional() @IsString() representativePhone?: string;
@@ -69,7 +79,7 @@ class UpdateStoreDto {
   @IsOptional() @IsString() slug?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() email?: string;
-  @IsOptional() @IsString() address?: string;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @ValidateNested() @Type(() => AddressPartsDto) addressParts?: AddressPartsDto | null;
   @IsOptional() @IsString() logo?: string;
   @IsOptional() @IsString() note?: string;
   @IsOptional() @IsIn(Object.values(StoreStatus)) status?: StoreStatus;
@@ -80,7 +90,7 @@ class UpdateStoreDto {
   @IsOptional() @IsString() businessName?: string;
   @IsOptional() @IsIn(['HKD', 'CONG_TY', 'CA_NHAN', '']) businessType?: string;
   @IsOptional() @IsString() taxCode?: string;
-  @IsOptional() @IsString() businessAddress?: string;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @ValidateNested() @Type(() => AddressPartsDto) businessAddressParts?: AddressPartsDto | null;
   @IsOptional() @IsString() representative?: string;
   @IsOptional() @IsString() representativeId?: string;
   @IsOptional() @IsString() representativePhone?: string;
@@ -129,6 +139,7 @@ class PaymentQuery extends PaginationDto {
 
 class UserQuery extends PaginationDto {
   @IsOptional() @IsIn(Object.values(Role)) role?: Role;
+  @IsOptional() @IsIn(['customers', 'users']) kind?: 'customers' | 'users';
 }
 
 class UpdateUserDto {
@@ -173,5 +184,5 @@ export class SuperController {
   }
 }
 
-@Module({ controllers: [SuperController], providers: [SuperService] })
+@Module({ controllers: [SuperController], providers: [SuperService], exports: [SuperService] })
 export class SuperModule {}

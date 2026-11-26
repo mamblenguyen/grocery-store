@@ -2,15 +2,22 @@
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal, Spinner } from '@/components/ui';
 import { api } from '@/lib/api';
 import { money } from '@/lib/format';
 import type { Plan } from '@/lib/types';
 
-type Form = { id?: number; code: string; name: string; description: string; priceMonthly: string; maxProducts: string; maxStaff: string; isActive: boolean; sortOrder: string };
+const FEATURES = [
+  ['RETURNS', 'Đổi trả & khiếu nại'], ['RECONCILIATION', 'Đối soát'], ['LOYALTY', 'Thành viên & tích điểm'],
+  ['ADVANCED_PROMOTIONS', 'Khuyến mãi nâng cao'], ['COUPONS', 'Mã giảm giá'], ['CRM', 'CRM & marketing'], ['AUDIT_LOG', 'Audit log'],
+] as const;
+type Form = { id?: number; code: string; name: string; description: string; priceMonthly: string; maxProducts: string; maxStaff: string; maxOrdersMonthly: string; maxCampaignsMonthly: string; auditRetentionDays: string; features: string[]; isActive: boolean; sortOrder: string };
 const toForm = (p?: Plan): Form => ({
   id: p?.id, code: p?.code ?? '', name: p?.name ?? '', description: p?.description ?? '', priceMonthly: String(p?.priceMonthly ?? 0),
   maxProducts: p?.maxProducts == null ? '' : String(p.maxProducts), maxStaff: p?.maxStaff == null ? '' : String(p.maxStaff),
+  maxOrdersMonthly: p?.maxOrdersMonthly == null ? '' : String(p.maxOrdersMonthly), maxCampaignsMonthly: p?.maxCampaignsMonthly == null ? '' : String(p.maxCampaignsMonthly),
+  auditRetentionDays: p?.auditRetentionDays == null ? '' : String(p.auditRetentionDays), features: p?.features ?? [],
   isActive: p?.isActive ?? true, sortOrder: String(p?.sortOrder ?? 0),
 });
 
@@ -26,6 +33,8 @@ export default function PlansPage() {
     const body = {
       code: f!.code || undefined, name: f!.name, description: f!.description, priceMonthly: Number(f!.priceMonthly || 0),
       maxProducts: f!.maxProducts === '' ? null : Number(f!.maxProducts), maxStaff: f!.maxStaff === '' ? null : Number(f!.maxStaff),
+      maxOrdersMonthly: f!.maxOrdersMonthly === '' ? null : Number(f!.maxOrdersMonthly), maxCampaignsMonthly: f!.maxCampaignsMonthly === '' ? null : Number(f!.maxCampaignsMonthly),
+      auditRetentionDays: f!.auditRetentionDays === '' ? null : Number(f!.auditRetentionDays), features: f!.features,
       isActive: f!.isActive, sortOrder: Number(f!.sortOrder || 0),
     };
     try {
@@ -35,7 +44,7 @@ export default function PlansPage() {
   };
 
   const remove = async (p: Plan) => {
-    if (!confirm(`Xoá gói "${p.name}"?`)) return;
+    if (!(await confirmDialog(`Xoá gói "${p.name}"?`, 'Gói đang được cửa hàng sử dụng có thể không xoá được.', 'Xoá', true))) return;
     try { await api(`/super/plans/${p.id}`, { method: 'DELETE' }); toast('Đã xoá'); load(); } catch (e: any) { toast(e.message, 'error'); }
   };
 
@@ -58,8 +67,12 @@ export default function PlansPage() {
               <ul className="mt-3 space-y-1 text-sm text-slate-600">
                 <li>Sản phẩm: <b>{p.maxProducts ?? 'Không giới hạn'}</b></li>
                 <li>Nhân viên: <b>{p.maxStaff ?? 'Không giới hạn'}</b></li>
+                <li>Đơn hàng/tháng: <b>{p.maxOrdersMonthly ?? 'Không giới hạn'}</b></li>
+                <li>Chiến dịch/tháng: <b>{p.maxCampaignsMonthly ?? 'Không giới hạn'}</b></li>
+                <li>Audit log: <b>{p.auditRetentionDays ? `${p.auditRetentionDays} ngày` : 'Không giới hạn'}</b></li>
                 <li>Đang dùng: <b>{p._count?.stores ?? 0}</b> cửa hàng</li>
               </ul>
+              <div className="mt-3 flex flex-wrap gap-1">{p.features.map((key) => <span key={key} className="badge bg-violet-50 text-violet-700">{FEATURES.find(([id]) => id === key)?.[1] ?? key}</span>)}</div>
               <div className="mt-auto flex justify-end gap-2 pt-4">
                 <button className="btn-outline btn-sm" onClick={() => setF(toForm(p))}><Pencil className="h-3.5 w-3.5" /> Sửa</button>
                 <button className="btn-outline btn-sm text-red-600" disabled={!!p._count?.stores} title={p._count?.stores ? 'Gói đang được sử dụng' : ''} onClick={() => remove(p)}><Trash2 className="h-3.5 w-3.5" /></button>
@@ -81,6 +94,12 @@ export default function PlansPage() {
               <div><label className="label">Tối đa sản phẩm</label><input className="input" type="number" min={1} placeholder="Không giới hạn" value={f.maxProducts} onChange={(e) => setF({ ...f, maxProducts: e.target.value })} /></div>
               <div><label className="label">Tối đa nhân viên</label><input className="input" type="number" min={0} placeholder="Không giới hạn" value={f.maxStaff} onChange={(e) => setF({ ...f, maxStaff: e.target.value })} /></div>
             </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div><label className="label">Đơn hàng / tháng</label><input className="input" type="number" min={1} placeholder="Không giới hạn" value={f.maxOrdersMonthly} onChange={(e) => setF({ ...f, maxOrdersMonthly: e.target.value })} /></div>
+              <div><label className="label">Chiến dịch / tháng</label><input className="input" type="number" min={1} placeholder="Không giới hạn" value={f.maxCampaignsMonthly} onChange={(e) => setF({ ...f, maxCampaignsMonthly: e.target.value })} /></div>
+              <div><label className="label">Lưu audit log (ngày)</label><input className="input" type="number" min={1} placeholder="Không giới hạn" value={f.auditRetentionDays} onChange={(e) => setF({ ...f, auditRetentionDays: e.target.value })} /></div>
+            </div>
+            <div><label className="label">Quyền tính năng</label><div className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-2">{FEATURES.map(([key, label]) => <label key={key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.features.includes(key)} onChange={(e) => setF({ ...f, features: e.target.checked ? [...f.features, key] : f.features.filter((item) => item !== key) })} /> {label}</label>)}</div></div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div><label className="label">Thứ tự hiển thị</label><input className="input" type="number" value={f.sortOrder} onChange={(e) => setF({ ...f, sortOrder: e.target.value })} /></div>
               <label className="mt-7 flex items-center gap-2 text-sm"><input type="checkbox" checked={f.isActive} onChange={(e) => setF({ ...f, isActive: e.target.checked })} /> Đang bán</label>

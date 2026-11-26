@@ -1,7 +1,9 @@
 'use client';
-import { Banknote, Bike, CheckCircle2, ChevronRight, Clock, MapPin, Navigation, Package, Power, RefreshCw, Store } from 'lucide-react';
+import { Banknote, Bike, CheckCircle2, ChevronRight, Clock, MapPin, MapPinned, Navigation, Package, Power, RefreshCw, Store } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AreaPicker } from '@/components/AreaPicker';
+import { DeliveryMoney } from '@/components/DeliveryMoney';
 import { useToast } from '@/components/Toast';
 import { Empty, Spinner } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -9,6 +11,7 @@ import { dateTime, money } from '@/lib/format';
 import { DELIVERY_STATUS, VEHICLES, type LatLng } from '@/lib/geo';
 import type { Job, ShipperMe } from '@/lib/shipper';
 import { useLiveLocation } from '@/lib/use-live-location';
+import { areaPayload, type ServiceArea } from '@/lib/vn-address';
 
 function JobCard({ j, children }: { j: Job; children?: React.ReactNode }) {
   const st = DELIVERY_STATUS[j.status];
@@ -19,6 +22,7 @@ function JobCard({ j, children }: { j: Job; children?: React.ReactNode }) {
           <div className="text-xl font-extrabold text-brand-700">+{money(j.fee)}</div>
           <div className="text-xs text-slate-500">Đơn {j.order.code} · {j.itemCount} món{j.distanceKm != null ? ` · quãng đường ${j.distanceKm} km` : ''}</div>
         </div>
+        {j.status === 'WAITING' && j.inArea === false && <span className="badge bg-amber-100 text-amber-800">Ngoài vùng</span>}
         {j.status === 'WAITING'
           ? j.toPickupKm != null && <span className="badge bg-sky-50 text-sky-700"><Navigation className="h-3 w-3" />Cách bạn {j.toPickupKm} km · ~{j.etaPickupMin}′</span>
           : <span className={`badge ${st?.cls}`}>{st?.label}</span>}
@@ -29,9 +33,10 @@ function JobCard({ j, children }: { j: Job; children?: React.ReactNode }) {
         <div className="relative"><span className="absolute -left-6 flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-white"><MapPin className="h-3 w-3" /></span><div className="font-semibold text-ink">{j.order.customerName}</div><div className="text-slate-500">{j.dropoffAddress}</div></div>
       </div>
       <div className="flex flex-wrap gap-2 text-xs">
-        {j.codAmount > 0 ? <span className="badge bg-amber-100 text-amber-800"><Banknote className="h-3 w-3" />Thu hộ {money(j.codAmount)}</span> : <span className="badge bg-green-100 text-green-800">Đã thanh toán – không thu tiền</span>}
+        {j.codAmount > 0 ? <span className="badge bg-amber-100 text-amber-800"><Banknote className="h-3 w-3" />Thu hộ {money(j.codAmount)}</span> : <span className="badge bg-green-100 text-green-800">Khách đã thanh toán – không thu tiền</span>}
         {j.order.deliverySlot && <span className="badge bg-slate-100 text-slate-600"><Clock className="h-3 w-3" />{j.order.deliverySlot}</span>}
       </div>
+      <DeliveryMoney fee={j.fee} codAmount={j.codAmount} viewer="shipper" compact />
       {children}
     </div>
   );
@@ -45,13 +50,16 @@ export default function ShipperHome() {
   const [active, setActive] = useState<Job[] | null>(null);
   const [history, setHistory] = useState<Job[] | null>(null);
   const [busy, setBusy] = useState(0);
+  const [scope, setScope] = useState<'area' | 'all'>('area');
+  const [areas, setAreas] = useState<ServiceArea[] | null>(null);
+  const [savingAreas, setSavingAreas] = useState(false);
   const pos = useRef<LatLng | null>(null);
 
   const loadMe = useCallback(() => api<ShipperMe>('/shipper/me').then(setMe), []);
   const loadJobs = useCallback(() => {
-    const q = pos.current ? `?lat=${pos.current.lat}&lng=${pos.current.lng}` : '';
-    return api<Job[]>('/shipper/jobs' + q).then(setJobs).catch(() => setJobs([]));
-  }, []);
+    const q = new URLSearchParams({ scope, ...(pos.current && { lat: String(pos.current.lat), lng: String(pos.current.lng) }) });
+    return api<Job[]>(`/shipper/jobs?${q}`).then(setJobs).catch(() => setJobs([]));
+  }, [scope]);
   const loadActive = useCallback(() => api<{ items: Job[] }>('/shipper/deliveries?status=active').then((r) => setActive(r.items)), []);
   const loadHistory = useCallback(() => api<{ items: Job[] }>('/shipper/deliveries?status=history&limit=30').then((r) => setHistory(r.items)), []);
   const refresh = useCallback(() => { loadMe(); loadJobs(); loadActive(); }, [loadMe, loadJobs, loadActive]);
@@ -76,6 +84,13 @@ export default function ShipperHome() {
     await api('/shipper/me', { method: 'PATCH', json: { isOnline: next, ...loc } });
     toast(next ? 'Đã bật nhận đơn' : 'Đã tắt nhận đơn');
     refresh();
+  };
+
+  const saveAreas = async () => {
+    if (!areas) return;
+    setSavingAreas(true);
+    try { await api('/shipper/me', { method: 'PATCH', json: { areas: areaPayload(areas) } }); toast('Đã lưu vùng hoạt động'); setAreas(null); refresh(); }
+    catch (e: any) { toast(e.message, 'error'); } finally { setSavingAreas(false); }
   };
 
   const accept = async (j: Job) => {
@@ -105,6 +120,12 @@ export default function ShipperHome() {
           <div className="p-3"><div className="text-lg font-extrabold">{me.stats.todayTrips}</div><div className="text-[11px] text-white/80">Chuyến hôm nay</div></div>
           <div className="p-3"><div className="text-lg font-extrabold">{money(me.stats.todayCod)}</div><div className="text-[11px] text-white/80">Tiền thu hộ (COD)</div></div>
         </div>
+        {(me.stats.todayToStores > 0 || me.stats.todayFromStores > 0) && (
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-white/15 px-3 py-2 text-xs text-white/90" data-testid="cash-summary">
+            {me.stats.todayFromStores > 0 && <span>Đã nhận từ cửa hàng: <b>{money(me.stats.todayFromStores)}</b></span>}
+            {me.stats.todayToStores > 0 && <span>Phải nộp lại cửa hàng: <b className="text-amber-200">{money(me.stats.todayToStores)}</b></span>}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-1 rounded-xl bg-white p-1 shadow-soft">
@@ -113,6 +134,29 @@ export default function ShipperHome() {
         ))}
         <button onClick={refresh} className="rounded-lg px-3 text-slate-500 hover:bg-slate-100" aria-label="Làm mới"><RefreshCw className="h-4 w-4" /></button>
       </div>
+
+      {tab === 'jobs' && (
+        <div className="card space-y-2 p-3">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <MapPinned className="h-4 w-4 shrink-0 text-brand-600" />
+            <span className="min-w-0 flex-1 truncate" title={me.profile.area ?? ''}>Vùng: <b>{me.profile.areas?.length ? me.profile.area : 'Mọi nơi'}</b></span>
+            <button className="btn-ghost btn-sm" onClick={() => setAreas(areas ? null : me.profile.areas ?? [])} data-testid="edit-areas">{areas ? 'Đóng' : 'Đổi vùng'}</button>
+          </div>
+          {!!me.profile.areas?.length && (
+            <div className="flex gap-1 text-xs">
+              {([['area', 'Trong vùng của tôi'], ['all', 'Tất cả đơn']] as const).map(([k, l]) => (
+                <button key={k} onClick={() => setScope(k)} className={`chip ${scope === k ? 'chip-active' : ''}`}>{l}</button>
+              ))}
+            </div>
+          )}
+          {areas && (
+            <div className="space-y-2">
+              <AreaPicker value={areas} onChange={setAreas} />
+              <div className="flex justify-end"><button className="btn-primary btn-sm" disabled={savingAreas} onClick={saveAreas} data-testid="save-areas">{savingAreas ? 'Đang lưu…' : 'Lưu vùng hoạt động'}</button></div>
+            </div>
+          )}
+        </div>
+      )}
 
       {tab === 'jobs' && (!online ? (
         <div className="card text-center text-sm text-slate-500"><Power className="mx-auto mb-2 h-8 w-8 text-slate-300" />Bật <b>nhận đơn</b> để xem các đơn đang chờ giao gần bạn.</div>

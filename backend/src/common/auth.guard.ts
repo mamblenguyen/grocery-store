@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ROLES_KEY } from './decorators';
+import { PLAN_FEATURE_KEY } from './plan-features';
 import { isExpired, tenant } from './tenant';
 
 export interface JwtPayload {
@@ -13,7 +14,7 @@ export interface JwtPayload {
 }
 
 const STORE_ROLES: Role[] = ['ADMIN', 'STAFF'];
-const storeSelect = { id: true, slug: true, name: true, status: true, planExpiresAt: true } as const;
+const storeSelect = { id: true, slug: true, name: true, status: true, planExpiresAt: true, plan: { select: { name: true, features: true } } } as const;
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -44,6 +45,7 @@ export class AuthGuard implements CanActivate {
     const t = tenant();
     const isAdminRoute = String(req.path ?? req.url).includes('/admin/');
     const needsStoreRole = roles.some((r) => STORE_ROLES.includes(r));
+    const requiredFeature = this.reflector.getAllAndOverride<string>(PLAN_FEATURE_KEY, [ctx.getHandler(), ctx.getClass()]);
 
     if (STORE_ROLES.includes(user.role)) {
       // Nhân viên: LUÔN dùng cửa hàng của tài khoản, bỏ qua mọi header → không truy cập được cửa hàng khác
@@ -59,6 +61,9 @@ export class AuthGuard implements CanActivate {
         if (isExpired(user.store) && req.method !== 'GET')
           throw new HttpException('Gói dịch vụ đã hết hạn – cửa hàng chỉ được xem dữ liệu. Vui lòng gia hạn để tiếp tục.', HttpStatus.PAYMENT_REQUIRED);
       }
+      const features = Array.isArray(user.store.plan?.features) ? user.store.plan.features : [];
+      if (requiredFeature && !features.includes(requiredFeature))
+        throw new HttpException(`Tính năng này không có trong gói "${user.store.plan?.name ?? 'hiện tại'}". Vui lòng nâng cấp gói dịch vụ.`, HttpStatus.PAYMENT_REQUIRED);
     } else if (user.role === 'SUPER_ADMIN') {
       // Super admin quản trị hộ cửa hàng qua header X-Store-Id (không bị giới hạn bởi trạng thái / hạn gói)
       const rawActing = String(req.headers['x-store-id'] ?? '');

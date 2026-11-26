@@ -1,1 +1,3 @@
-Ảnh minh hoạ sản phẩm mẫu, dùng đồ hoạ Twemoji © Twitter/X & contributors – CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Ảnh thật của sản phẩm do cửa hàng tự tải lên.
+Ảnh danh mục (cat-*.svg): đồ hoạ Twemoji © Twitter/X & contributors – CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+Ảnh sản phẩm mẫu (real/*.jpg): ảnh chụp thật – nguồn & giấy phép từng ảnh xem real/CREDITS.txt.
+Các file <sản phẩm>.svg còn lại là ảnh minh hoạ của bản cũ (seed tự đổi sang ảnh thật).

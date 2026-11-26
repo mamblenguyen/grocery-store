@@ -24,8 +24,13 @@ export function routeFromUrl(url?: string) {
 /** Đăng ký nhận push (chỉ trên điện thoại thật, cần projectId của EAS trong app.json) */
 async function registerPush(): Promise<string | null> {
   if (Platform.OS === 'web' || !Device.isDevice) return null;
-  const projectId = (Constants.expoConfig?.extra as any)?.eas?.projectId || (Constants as any).easConfig?.projectId;
-  if (!projectId) { console.log('[push] Chưa cấu hình extra.eas.projectId → bỏ qua đăng ký push'); return null; }
+  const projectId = (Constants as any).easConfig?.projectId
+    || (Constants.expoConfig?.extra as any)?.eas?.projectId
+    || process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+  if (!projectId) {
+    console.warn('[push] Thiếu EAS projectId. Chạy `npx eas-cli@latest init` hoặc đặt EXPO_PUBLIC_EAS_PROJECT_ID.');
+    return null;
+  }
   if (Platform.OS === 'android')
     await Notifications.setNotificationChannelAsync('default', { name: 'Thông báo đơn hàng', importance: Notifications.AndroidImportance.HIGH });
   let { status } = await Notifications.getPermissionsAsync();

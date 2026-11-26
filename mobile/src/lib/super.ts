@@ -15,6 +15,8 @@ export interface PartnerInfo {
 
 export interface SuperStore extends PartnerInfo {
   id: number; slug: string; name: string; phone?: string | null; email?: string | null; address?: string | null;
+  street?: string | null; provinceCode?: number | null; provinceName?: string | null; districtCode?: number | null; districtName?: string | null;
+  wardCode?: number | null; wardName?: string | null;
   status: StoreStatus; planId: number | null; planExpiresAt: string | null; note?: string | null; createdAt: string;
   plan: Pick<Plan, 'id' | 'code' | 'name' | 'priceMonthly' | 'maxProducts' | 'maxStaff'> | null;
   _count: { products: number; orders: number; members: number };

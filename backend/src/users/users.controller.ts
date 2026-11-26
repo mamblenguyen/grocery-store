@@ -58,14 +58,3 @@ export class CustomersController {
     return this.users.customerDetail(id);
   }
 }
-
-/** Gói dịch vụ đang dùng, mức sử dụng & lịch sử thanh toán phí nền tảng */
-@Controller('admin/subscription')
-@StoreOwner()
-export class SubscriptionController {
-  constructor(private users: UsersService) {}
-
-  @Get() get() {
-    return this.users.subscription();
-  }
-}

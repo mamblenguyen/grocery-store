@@ -2,8 +2,10 @@ import { Platform } from 'react-native';
 import { secure } from './storage';
 
 /** Mặc định: web/iOS dùng localhost, máy ảo Android dùng 10.0.2.2 (= localhost của máy tính) */
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'android' ? 'http://10.0.2.2:4000/api' : 'http://localhost:4000/api');
-export const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL || 'http://localhost:3000';
+const DEV_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${DEV_HOST}:4000/api`;
+/** Web (Next.js) – ảnh minh hoạ mẫu /products/*.svg nằm ở đây, nên máy ảo Android cũng phải dùng 10.0.2.2 */
+export const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL || `http://${DEV_HOST}:3000`;
 const ASSET_BASE = API_URL.replace(/\/api\/?$/, '');
 export const TOKEN_KEY = 'grocery_token';
 

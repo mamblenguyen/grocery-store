@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { StockDocForm } from '@/components/admin/StockDocForm';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
+import { promptDialog } from '@/components/PromptDialog';
 import { Badge, Spinner } from '@/components/ui';
 import { api, imageUrl } from '@/lib/api';
 import { dateOnly, dateTime, EXPORT_REASONS, money, STOCK_DOC_STATUS, STOCK_DOC_TYPE } from '@/lib/format';
@@ -29,13 +31,13 @@ export default function StockDocDetail() {
           <a href={`/print/stock/${doc.id}`} target="_blank" className="btn-outline"><Printer className="h-4 w-4" /> In phiếu</a>
           {doc.status === 'DRAFT' && (
             <>
-              <button className="btn-outline text-red-600" onClick={() => confirm('Xoá phiếu nháp này?') && act(async () => { await api(`/admin/stock/documents/${doc.id}`, { method: 'DELETE' }); router.push('/admin/stock'); }, 'Đã xoá phiếu')}><Trash2 className="h-4 w-4" /> Xoá nháp</button>
-              <button className="btn-primary" onClick={() => confirm('Hoàn tất phiếu và cập nhật tồn kho?') && act(() => api(`/admin/stock/documents/${doc.id}/complete`, { method: 'POST' }), 'Đã hoàn tất phiếu')}><CheckCircle2 className="h-4 w-4" /> Hoàn tất ngay</button>
+              <button className="btn-outline text-red-600" onClick={async () => { if (await confirmDialog('Xoá phiếu nháp này?', 'Phiếu sẽ bị xoá vĩnh viễn.', 'Xoá phiếu', true)) act(async () => { await api(`/admin/stock/documents/${doc.id}`, { method: 'DELETE' }); router.push('/admin/stock'); }, 'Đã xoá phiếu'); }}><Trash2 className="h-4 w-4" /> Xoá nháp</button>
+              <button className="btn-primary" onClick={async () => { if (await confirmDialog('Hoàn tất phiếu?', 'Tồn kho sẽ được cập nhật ngay sau khi hoàn tất.', 'Hoàn tất')) act(() => api(`/admin/stock/documents/${doc.id}/complete`, { method: 'POST' }), 'Đã hoàn tất phiếu'); }}><CheckCircle2 className="h-4 w-4" /> Hoàn tất ngay</button>
             </>
           )}
           {doc.status === 'COMPLETED' && (
-            <button className="btn-danger" onClick={() => {
-              const reason = prompt('Lý do huỷ phiếu? (tồn kho sẽ được đảo ngược)');
+            <button className="btn-danger" onClick={async () => {
+              const reason = await promptDialog({ title: 'Huỷ phiếu kho?', message: 'Tồn kho sẽ được đảo ngược theo phiếu này.', label: 'Lý do huỷ', placeholder: 'Nhập lý do huỷ phiếu', confirmText: 'Huỷ phiếu', destructive: true });
               if (reason) act(() => api(`/admin/stock/documents/${doc.id}/cancel`, { method: 'POST', json: { reason } }), 'Đã huỷ phiếu & đảo ngược tồn kho');
             }}><Ban className="h-4 w-4" /> Huỷ phiếu</button>
           )}

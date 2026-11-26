@@ -5,6 +5,7 @@ import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { money } from '@/lib/format';
 import type { Category, Product } from '@/lib/types';
+import { VAT_OPTIONS } from '@/lib/vat';
 import { ImageUploader } from './ImageUploader';
 
 interface OptionRow { name: string; values: string[]; draft: string }
@@ -34,6 +35,7 @@ export function ProductForm({ product, onSaved }: { product?: Product; onSaved?:
     name: product?.name ?? '', slug: product?.slug ?? '', description: product?.description ?? '',
     brand: product?.brand ?? '', unit: product?.unit ?? '', categoryId: product?.categoryId ? String(product.categoryId) : '',
     isActive: product?.isActive ?? true, isFeatured: product?.isFeatured ?? false,
+    vatRate: product?.vatRate ?? '',
   });
   const [thumbnail, setThumbnail] = useState<string[]>(product?.thumbnail ? [product.thumbnail] : []);
   const [images, setImages] = useState<string[]>(product?.images ?? []);
@@ -81,6 +83,7 @@ export function ProductForm({ product, onSaved }: { product?: Product; onSaved?:
     const payload = {
       ...info,
       categoryId: info.categoryId ? Number(info.categoryId) : null,
+      vatRate: info.vatRate || null,
       slug: info.slug || undefined,
       thumbnail: thumbnail[0] ?? images[0],
       images,
@@ -124,6 +127,13 @@ export function ProductForm({ product, onSaved }: { product?: Product; onSaved?:
               <option value="">— Không —</option>
               {cats.map((c) => <option key={c.id} value={c.id}>{c.parent ? `${c.parent.name} › ` : ''}{c.name}</option>)}
             </select>
+          </div>
+          <div><label className="label">Thuế suất GTGT</label>
+            <select className="input" value={info.vatRate} onChange={(e) => setInfo({ ...info, vatRate: e.target.value })}>
+              <option value="">— Theo mặc định cửa hàng —</option>
+              {VAT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {info.vatRate && <p className="mt-1 text-xs text-slate-400">{VAT_OPTIONS.find((o) => o.value === info.vatRate)?.hint}</p>}
           </div>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={info.isActive} onChange={(e) => setInfo({ ...info, isActive: e.target.checked })} /> Đang bán</label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={info.isFeatured} onChange={(e) => setInfo({ ...info, isFeatured: e.target.checked })} /> Sản phẩm nổi bật</label>

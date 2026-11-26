@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put } from '@
 import { AdminOnly } from '../common/decorators';
 import { SaveCouponDto, ValidateCouponDto } from './coupons.dto';
 import { CouponsService } from './coupons.service';
+import { PlanFeature } from '../common/plan-features';
 
 @Controller('coupons')
 export class CouponsController {
@@ -15,6 +16,7 @@ export class CouponsController {
 
 @Controller('admin/coupons')
 @AdminOnly()
+@PlanFeature('COUPONS')
 export class AdminCouponsController {
   constructor(private service: CouponsService) {}
 

@@ -1,6 +1,7 @@
 'use client';
 import { AlertTriangle, ArrowRight, DollarSign, Package, ReceiptText, ShoppingBag, TrendingUp, Users } from 'lucide-react';
 import { StoreTag } from '@/components/admin/AllStores';
+import { BarChart } from '@/components/admin/BarChart';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Spinner, StatCard, StatusBadge } from '@/components/ui';
@@ -11,7 +12,7 @@ import type { Order } from '@/lib/types';
 interface Dashboard {
   stats: { revenue: number; todayRevenue: number; orders: number; todayOrders: number; customers: number; products: number };
   ordersByStatus: Record<string, number>;
-  chart: { date: string; revenue: number; orders: number }[];
+  chart: { date: string; revenue: number; goods: number; shipping: number; discount: number; orders: number; cancelled: number; completed: number }[];
   topProducts: { productId: number; productName: string; quantity: number; revenue: number }[];
   lowStock: { id: number; sku: string; name: string; stock: number; lowStockThreshold: number; productName: string }[];
   recentOrders: Order[];
@@ -22,7 +23,6 @@ export default function AdminDashboard() {
   const [d, setD] = useState<Dashboard | null>(null);
   useEffect(() => { api<Dashboard>(`/admin/dashboard?days=${days}`).then(setD); }, [days]);
   if (!d) return <Spinner />;
-  const max = Math.max(1, ...d.chart.map((c) => c.revenue));
   const periodRevenue = d.chart.reduce((s, c) => s + c.revenue, 0);
   const totalOrders = Object.values(d.ordersByStatus).reduce((a, b) => a + b, 0) || 1;
 
@@ -38,18 +38,32 @@ export default function AdminDashboard() {
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="card xl:col-span-2">
           <div className="mb-5 flex items-center justify-between">
-            <div><h2 className="font-bold text-ink">Doanh thu theo ngày</h2><p className="text-xs text-slate-400">Không tính đơn đã huỷ</p></div>
+            <div><h2 className="font-bold text-ink">Doanh thu theo ngày</h2><p className="text-xs text-slate-400">Tổng tiền các đơn chưa huỷ (gồm phí ship) · theo giờ Việt Nam · rê chuột / chạm vào cột để xem chi tiết</p></div>
             <div className="flex rounded-xl bg-slate-100 p-1">{[7, 14, 30].map((n) => <button key={n} onClick={() => setDays(n)} className={`rounded-lg px-3 py-1 text-xs font-semibold ${days === n ? 'bg-white text-ink shadow-sm' : 'text-slate-500'}`}>{n} ngày</button>)}</div>
           </div>
-          <div className="flex h-64 items-end gap-1.5">
-            {d.chart.map((c) => (
-              <div key={c.date} className="group relative flex h-full flex-1 flex-col items-center justify-end">
-                <div className="pointer-events-none absolute bottom-full mb-1 hidden rounded-lg bg-ink px-2.5 py-1.5 text-xs whitespace-nowrap text-white shadow-lg group-hover:block">{money(c.revenue)}<br />{c.orders} đơn · {c.date.slice(8)}/{c.date.slice(5, 7)}</div>
-                <div className="w-full max-w-10 rounded-t-lg bg-gradient-to-t from-brand-600 to-brand-400 transition group-hover:from-brand-700" style={{ height: `${(c.revenue / max) * 100}%`, minHeight: c.revenue ? 6 : 2 }} />
-                {(d.chart.length <= 14 || Number(c.date.slice(8)) % 3 === 0) && <div className="mt-1.5 text-[10px] text-slate-400">{c.date.slice(8)}/{c.date.slice(5, 7)}</div>}
-              </div>
-            ))}
-          </div>
+          <BarChart
+            data={d.chart.map((c) => {
+              const [y, m, day] = c.date.split('-');
+              const wd = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][new Date(Number(y), Number(m) - 1, Number(day)).getDay()];
+              return {
+                key: c.date,
+                label: `${day}/${m}`,
+                bar: { value: c.revenue, className: 'bg-gradient-to-t from-brand-600 to-brand-400' },
+                tooltip: {
+                  title: `${wd}, ${day}/${m}/${y}`,
+                  rows: [
+                    { label: 'Doanh thu', value: money(c.revenue) },
+                    { label: 'Tiền hàng (đã trừ giảm giá)', value: money(c.goods), tone: 'muted' as const },
+                    { label: 'Phí giao hàng', value: money(c.shipping), tone: 'muted' as const },
+                    ...(c.discount ? [{ label: 'Giảm giá', value: `-${money(c.discount)}`, tone: 'muted' as const }] : []),
+                    { label: 'Số đơn', value: `${c.orders} (${c.completed} hoàn thành)` },
+                    ...(c.cancelled ? [{ label: 'Đơn đã huỷ', value: String(c.cancelled), tone: 'neg' as const }] : []),
+                    ...(c.orders ? [{ label: 'TB / đơn', value: money(Math.round(c.revenue / c.orders)), tone: 'muted' as const }] : []),
+                  ],
+                },
+              };
+            })}
+          />
         </div>
         <div className="card">
           <h2 className="mb-4 font-bold text-ink">Trạng thái đơn hàng</h2>

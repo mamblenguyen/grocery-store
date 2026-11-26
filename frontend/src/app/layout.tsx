@@ -13,6 +13,8 @@ import { AuthProvider } from '@/context/auth';
 import { CartProvider } from '@/context/cart';
 import { WishlistProvider } from '@/context/wishlist';
 import { ToastProvider } from '@/components/Toast';
+import { ConfirmDialogProvider } from '@/components/ConfirmDialog';
+import { PromptDialogProvider } from '@/components/PromptDialog';
 import { PLATFORM_NAME } from '@/lib/platform';
 import './globals.css';
 
@@ -28,11 +30,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="vi">
       <body>
         <ToastProvider>
+          <ConfirmDialogProvider>
+          <PromptDialogProvider>
           <AuthProvider>
             <WishlistProvider>
               <CartProvider>{children}</CartProvider>
             </WishlistProvider>
           </AuthProvider>
+          </PromptDialogProvider>
+          </ConfirmDialogProvider>
         </ToastProvider>
       </body>
     </html>

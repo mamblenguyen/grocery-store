@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Empty, Pagination, Spinner } from '@/components/ui';
 import { api, qs } from '@/lib/api';
 import { date, money } from '@/lib/format';
@@ -17,7 +18,7 @@ export default function PaymentsPage() {
   useEffect(() => { setData(null); load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [f]);
 
   const remove = async (p: StorePaymentRow) => {
-    if (!confirm('Xoá phiếu thu này? (hạn dùng của cửa hàng không tự thay đổi)')) return;
+    if (!(await confirmDialog('Xoá phiếu thu này?', 'Hạn dùng của cửa hàng sẽ không tự thay đổi.', 'Xoá phiếu', true))) return;
     try { await api(`/super/payments/${p.id}`, { method: 'DELETE' }); toast('Đã xoá phiếu thu'); load(); } catch (e: any) { toast(e.message, 'error'); }
   };
 

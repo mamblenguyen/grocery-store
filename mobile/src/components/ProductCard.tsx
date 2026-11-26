@@ -31,20 +31,22 @@ export function ProductCard({ p, width }: { p: Product; width: number }) {
   }, undefined);
   const discount = best?.compareAtPrice ? Math.round((1 - best.price / best.compareAtPrice) * 100) : 0;
   const out = active.every((v) => v.stock <= 0);
-  const single = active.length === 1 ? active[0] : null;
+  // Thêm nhanh: 1 loại → loại đó; nhiều loại → loại rẻ nhất còn hàng (đúng giá hiển thị trên card)
+  const pick = active.filter((v) => v.stock > 0).reduce<(typeof active)[number] | undefined>((b, v) => (!b || v.price < b.price ? v : b), undefined);
 
   const quickAdd = () => {
-    if (!single) return open();
+    if (!pick) return open();
+    const label = active.length > 1 && pick.name ? `${p.name} (${pick.name})` : p.name;
+    const line = { variantId: pick.id, productId: p.id, slug: p.slug, productName: p.name, variantName: pick.name, image: p.thumbnail, price: pick.price, stock: pick.stock };
     // Sản phẩm của cửa hàng khác (trang sàn) → thêm thẳng vào giỏ của cửa hàng đó
     if (otherStore) {
-      const line = { variantId: single.id, productId: p.id, slug: p.slug, productName: p.name, variantName: single.name, image: p.thumbnail, price: single.price, stock: single.stock };
-      if (!cart.addTo({ slug: p.store!.slug, name: p.store!.name }, line)) return toast(`Chỉ còn ${single.stock} sản phẩm`, 'error');
-      return toast(`Đã thêm "${p.name}" vào giỏ ${p.store!.name}`);
+      if (!cart.addTo({ slug: p.store!.slug, name: p.store!.name }, line)) return toast(`Chỉ còn ${pick.stock} sản phẩm`, 'error');
+      return toast(`Đã thêm "${label}" vào giỏ ${p.store!.name}`);
     }
-    const inCart = cart.items.find((i) => i.variantId === single.id)?.quantity ?? 0;
-    if (inCart >= single.stock) return toast(`Chỉ còn ${single.stock} sản phẩm`, 'error');
-    cart.add({ variantId: single.id, productId: p.id, slug: p.slug, productName: p.name, variantName: single.name, image: p.thumbnail, price: single.price, stock: single.stock });
-    toast(`Đã thêm "${p.name}"`);
+    const inCart = cart.items.find((i) => i.variantId === pick.id)?.quantity ?? 0;
+    if (inCart >= pick.stock) return toast(`Chỉ còn ${pick.stock} sản phẩm`, 'error');
+    cart.add(line);
+    toast(`Đã thêm "${label}"`);
   };
 
   return (
@@ -74,7 +76,7 @@ export function ProductCard({ p, width }: { p: Product; width: number }) {
           </View>
           {!out && (
             <Pressable testID={`quick-add-${p.slug}`} onPress={quickAdd} hitSlop={6} style={st.add} accessibilityLabel="Thêm vào giỏ">
-              <Ionicons name={single ? 'add' : 'cart-outline'} size={single ? 22 : 18} color="#fff" />
+              <Ionicons name="cart-outline" size={18} color="#fff" />
             </Pressable>
           )}
         </View>

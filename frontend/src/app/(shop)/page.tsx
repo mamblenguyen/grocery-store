@@ -1,9 +1,11 @@
 'use client';
-import { ArrowRight, Flame, Leaf, Search, ShieldCheck, Sparkles, Store, Tag, Truck } from 'lucide-react';
+import { ArrowRight, Flame, Handshake, Leaf, Search, ShieldCheck, Sparkles, Store, Tag, Truck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ProductCardSkeleton, ProductGrid } from '@/components/shop/ProductCard';
+import { Carousel } from '@/components/ui/Carousel';
+import { NearbyStores } from '@/components/shop/NearbyStores';
 import { api, imageUrl, qs } from '@/lib/api';
 import { PLATFORM_NAME } from '@/lib/platform';
 import type { MarketCategory, Paged, Product, PublicStore } from '@/lib/types';
@@ -63,9 +65,12 @@ export default function MarketHome() {
               <input className="h-full w-full min-w-0 bg-transparent px-3 text-ink outline-none placeholder:text-slate-400" placeholder="Tìm sản phẩm trên toàn sàn: mì, sữa, gạo…" value={q} onChange={(e) => setQ(e.target.value)} />
               <button className="mr-2 h-10 shrink-0 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white hover:bg-brand-700">Tìm</button>
             </form>
+            <Link href="/partner" data-testid="become-partner" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold backdrop-blur transition hover:bg-white/25">
+              <Handshake className="h-4 w-4" /> Bạn có tạp hoá? Trở thành đối tác bán hàng <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
           <div className="hidden grid-cols-2 gap-3 lg:grid">
-            {[[Store, `${stores.length || '…'} cửa hàng`, 'đang bán trên sàn'], [Truck, 'Giao tận nhà', 'từ tạp hoá gần bạn'], [Tag, 'Giá sốc mỗi ngày', 'so giá giữa các cửa hàng'], [ShieldCheck, 'Thanh toán an toàn', 'COD · VietQR · VNPay']].map(([I, a, b]) => {
+            {[[Store, `${stores.length || '…'} cửa hàng`, 'đang bán trên sàn'], [Truck, 'Giao tận nhà', 'từ tạp hoá gần bạn'], [Tag, 'Giá sốc mỗi ngày', 'so giá giữa các cửa hàng'], [ShieldCheck, 'Thanh toán an toàn', 'COD · chuyển khoản VietQR']].map(([I, a, b]) => {
               const Icon = I as typeof Store;
               return <div key={a as string} className="rounded-2xl bg-white/10 p-4 backdrop-blur"><Icon className="h-6 w-6" /><div className="mt-2 font-bold">{a as string}</div><div className="text-sm text-brand-50">{b as string}</div></div>;
             })}
@@ -75,19 +80,24 @@ export default function MarketHome() {
 
       {cats.length > 0 && (
         <section className="container-x pt-8">
-          <h2 className="section-title mb-4">Danh mục trên sàn</h2>
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+          <div className="mb-4 flex items-end justify-between gap-3">
+            <h2 className="section-title">Danh mục trên sàn</h2>
+            <Link href="/products" className="flex shrink-0 items-center gap-1 text-sm font-semibold text-brand-700 transition-all hover:gap-2">Tất cả sản phẩm <ArrowRight className="h-4 w-4" /></Link>
+          </div>
+          <Carousel label="Danh mục trên sàn">
             {cats.map((c) => (
-              <Link key={c.slug} href={`/products?category=${c.slug}`} className="group flex flex-col items-center gap-2 rounded-2xl border border-slate-200/70 bg-white p-3 text-center transition hover:border-brand-300 hover:shadow-soft">
+              <Link key={c.slug} href={`/products?category=${c.slug}`} className="group flex w-28 shrink-0 flex-col items-center gap-2 rounded-2xl border border-slate-200/70 bg-white p-3 text-center transition hover:border-brand-300 hover:shadow-soft sm:w-36">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imageUrl(c.image)} alt="" className="aspect-square w-full rounded-xl object-cover" />
                 <span className="line-clamp-2 text-xs font-semibold text-slate-700 group-hover:text-brand-700 sm:text-sm">{c.name}</span>
                 <span className="text-[11px] text-slate-400">{c.productCount} SP · {c.stores} cửa hàng</span>
               </Link>
             ))}
-          </div>
+          </Carousel>
         </section>
       )}
+
+      <NearbyStores />
 
       {stores.length > 0 && (
         <section className="container-x pt-8">

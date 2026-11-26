@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { StoreTag, useOpenInStore } from '@/components/admin/AllStores';
 import { Fragment, useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Empty, Pagination, Spinner } from '@/components/ui';
 import { api, imageUrl, qs } from '@/lib/api';
 import { money } from '@/lib/format';
@@ -77,7 +78,7 @@ export default function AdminProductsPage() {
                         {p.isFeatured ? 'Bỏ nổi bật' : 'Nổi bật'}
                       </button>
                       <button onClick={() => openInStore(p.store, `/admin/products/${p.id}`)} className="btn-outline btn-sm">Sửa</button>
-                      <button className="btn-danger btn-sm" onClick={() => confirm(`Xoá "${p.name}"?`) && action(() => api(`/admin/products/${p.id}`, { method: 'DELETE' }), 'Đã xoá')}>Xoá</button>
+                      <button className="btn-danger btn-sm" onClick={async () => { if (await confirmDialog(`Xoá "${p.name}"?`, 'Sản phẩm sẽ không thể khôi phục.', 'Xoá sản phẩm', true)) action(() => api(`/admin/products/${p.id}`, { method: 'DELETE' }), 'Đã xoá'); }}>Xoá</button>
                     </td>
                   </tr>
                   {expanded === p.id && (

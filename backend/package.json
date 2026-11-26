@@ -11,11 +11,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "db:seed": "prisma db seed",
+    "db:seed:customers": "tsx prisma/seed-demo-customers.ts",
     "db:migrate:deploy": "prisma migrate deploy",
     "create-super-admin": "tsx prisma/create-super-admin.ts"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",

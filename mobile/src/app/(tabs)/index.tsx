@@ -61,7 +61,8 @@ function StoreHome() {
   );
   const banner = settings.banners[slide];
   const catCols = width < 400 ? 4 : width < 700 ? 5 : 8;
-  const catW = (width - 32 - (catCols - 1) * 10) / catCols;
+  // carousel danh mục: lộ ra nửa ô cuối để người dùng biết vuốt được
+  const catW = (width - 16 - catCols * 10) / (catCols + 0.5);
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.white }}>
@@ -103,21 +104,25 @@ function StoreHome() {
           </Pressable>
         )}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingVertical: 14 }}>
-          {[['bicycle-outline', 'Giao nhanh 2h', settings.freeShippingThreshold ? `Free ship từ ${money(settings.freeShippingThreshold)}` : ''], ['leaf-outline', 'Tươi mỗi ngày', 'Nhập hàng mỗi sáng'], ['shield-checkmark-outline', 'Thanh toán an toàn', 'COD · VietQR · VNPay']].map(([i, a, b]) => (
+          {[['bicycle-outline', 'Giao nhanh 2h', settings.freeShippingThreshold ? `Free ship từ ${money(settings.freeShippingThreshold)}` : ''], ['leaf-outline', 'Tươi mỗi ngày', 'Nhập hàng mỗi sáng'], ['shield-checkmark-outline', 'Thanh toán an toàn', 'COD · chuyển khoản VietQR']].map(([i, a, b]) => (
             <Row key={a} gap={10} style={st.perk}><View style={st.perkIcon}><Ionicons name={i as any} size={20} color={C.brand700} /></View><View><Text style={{ fontWeight: '700', color: C.ink, fontSize: 13 }}>{a}</Text><Text style={{ fontSize: 11, color: C.muted }}>{b}</Text></View></Row>
           ))}
         </ScrollView>
 
-        <View style={{ paddingHorizontal: 16 }}>
-          <SectionHeader title="Danh mục" action="Tất cả" onAction={() => router.push('/categories')} />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+        <View>
+          <View style={{ paddingHorizontal: 16 }}>
+            <SectionHeader title="Danh mục" action="Tất cả" onAction={() => router.push('/categories')} />
+          </View>
+          {/* Carousel: vuốt ngang, dừng đúng từng ô */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={catW + 10}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
             {cats.map((c) => (
               <Pressable key={c.id} onPress={() => router.push(`/products?category=${c.slug}&title=${encodeURIComponent(c.name)}`)} style={{ width: catW, alignItems: 'center', gap: 6 }}>
                 <Image source={{ uri: imageUrl(c.image) }} style={{ width: catW - 8, height: catW - 8, borderRadius: 16, backgroundColor: C.brand50 }} contentFit="cover" />
                 <Text style={{ fontSize: 11, textAlign: 'center', color: C.text, fontWeight: '600' }} numberOfLines={2}>{c.name}</Text>
               </Pressable>
             ))}
-          </View>
+          </ScrollView>
         </View>
 
         {!sec ? <Loading full={false} /> : (
