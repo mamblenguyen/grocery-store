@@ -14,6 +14,7 @@ const MENU = [
   { href: '/admin/inventory', label: 'Kho hàng', icon: '🏬' },
   { href: '/admin/coupons', label: 'Mã giảm giá', icon: '🎟' },
   { href: '/admin/users', label: 'Người dùng', icon: '👥', adminOnly: true },
+  { href: '/admin/settings', label: 'Giao diện', icon: '🎨', adminOnly: true },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -29,19 +30,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex min-h-screen">
-      <aside className="fixed inset-y-0 left-0 flex w-60 flex-col bg-gray-900 text-gray-300">
+      <aside className="fixed inset-y-0 left-0 flex w-60 flex-col bg-sidebar text-gray-300">
         <Link href="/admin" className="px-5 py-5 text-lg font-bold text-white">🛒 Admin Tạp Hoá</Link>
         <nav className="flex-1 space-y-1 px-3">
           {MENU.filter((m) => !m.adminOnly || user?.role === 'ADMIN').map((m) => {
             const active = m.href === '/admin' ? pathname === '/admin' : pathname.startsWith(m.href);
             return (
-              <Link key={m.href} href={m.href} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${active ? 'bg-brand-600 text-white' : 'hover:bg-gray-800'}`}>
+              <Link key={m.href} href={m.href} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${active ? 'bg-brand-600 text-white' : 'hover:bg-sidebar-hover'}`}>
                 <span>{m.icon}</span>{m.label}
               </Link>
             );
           })}
         </nav>
-        <div className="border-t border-gray-800 p-4 text-sm">
+        <div className="border-t border-sidebar-hover p-4 text-sm">
           <div className="text-white">{user?.fullName}</div>
           <div className="text-xs text-gray-500">{ROLES[user!.role]}</div>
           <div className="mt-3 flex gap-3 text-xs">

@@ -71,7 +71,7 @@ export function ProductCard({ p }: { p: Product }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={imageUrl(p.thumbnail)} alt={p.name} className="h-full w-full object-cover transition group-hover:scale-105" />
         {compare && (
-          <span className="badge absolute top-2 left-2 bg-red-500 text-white">
+          <span className="badge absolute top-2 left-2 bg-accent-500 text-white">
             -{Math.round((1 - compare.price / compare.compareAtPrice!) * 100)}%
           </span>
         )}
