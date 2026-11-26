@@ -1,5 +1,5 @@
 import { DiscountType } from '@prisma/client';
-import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 export class SaveCouponDto {
   @IsString() @MinLength(3) code: string;
@@ -12,6 +12,8 @@ export class SaveCouponDto {
   @IsOptional() @IsDateString() startsAt?: string | null;
   @IsOptional() @IsDateString() endsAt?: string | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  @IsBoolean() audienceAll: boolean;
+  @IsOptional() @IsArray() @IsInt({ each: true }) recipientIds?: number[];
 }
 
 export class ValidateCouponDto {

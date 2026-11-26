@@ -1,0 +1,238 @@
+'use client';
+import { useStoreHref } from '@/context/store';
+import { Banknote, CalendarDays, CreditCard, Lock, MapPin, QrCode, TicketPercent } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { useToast } from '@/components/Toast';
+import { Spinner } from '@/components/ui';
+import { useAuth } from '@/context/auth';
+import { useCart } from '@/context/cart';
+import { AddressFields } from '@/components/AddressFields';
+import { LocationPicker } from '@/components/LocationPicker';
+import { type AddressParts, EMPTY_ADDRESS, isComplete, toParts, toPayload } from '@/lib/vn-address';
+import type { LatLng } from '@/lib/geo';
+import { useSettings } from '@/context/settings';
+import { api, imageUrl } from '@/lib/api';
+import { money } from '@/lib/format';
+import type { ShippingInfo } from '@/lib/shipping';
+import type { Address, EInvoiceRequest, Order } from '@/lib/types';
+import { cleanEInvoice, EInvoiceFields, EMPTY_EINVOICE } from '@/components/EInvoice';
+
+interface Preview { subtotal: number; discount: number; shippingFee: number; total: number; couponCode: string | null; minOrderValue: number; shipping: ShippingInfo | null }
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const WD = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+export default function CheckoutPage() {
+  const sh = useStoreHref();
+  const { user, loading } = useAuth();
+  const { settings } = useSettings();
+  const cart = useCart();
+  const router = useRouter();
+  const toast = useToast();
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [addrId, setAddrId] = useState<number | 'new'>('new');
+  const [form, setForm] = useState({ customerName: '', phone: '', note: '' });
+  const [wantInvoice, setWantInvoice] = useState(false);
+  const [invoice, setInvoice] = useState<EInvoiceRequest>(EMPTY_EINVOICE);
+  const [parts, setParts] = useState<AddressParts>(EMPTY_ADDRESS);
+  const [payment, setPayment] = useState<'COD' | 'BANK_TRANSFER' | 'VNPAY'>('COD');
+  const [deliveryDate, setDeliveryDate] = useState('');
+  const [deliverySlot, setDeliverySlot] = useState('');
+  const [coupon, setCoupon] = useState('');
+  const [applied, setApplied] = useState<string | undefined>();
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [pin, setPin] = useState<LatLng | null>(null);
+
+  const lineItems = cart.items.map((i) => ({ variantId: i.variantId, quantity: i.quantity }));
+  const days = useMemo(() => Array.from({ length: settings.deliveryDaysAhead + 1 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return d; }), [settings.deliveryDaysAhead]);
+  const methods = [
+    settings.payment.cod && { k: 'COD' as const, icon: <Banknote className="h-5 w-5" />, title: 'Thanh toán khi nhận hàng', sub: 'Trả tiền mặt cho shipper' },
+    settings.payment.bankTransfer && { k: 'BANK_TRANSFER' as const, icon: <QrCode className="h-5 w-5" />, title: 'Chuyển khoản VietQR', sub: 'Quét mã QR bằng app ngân hàng' },
+    settings.payment.vnpay && { k: 'VNPAY' as const, icon: <CreditCard className="h-5 w-5" />, title: 'VNPay', sub: 'Thẻ ATM, Visa, Master, QR' },
+  ].filter(Boolean) as { k: 'COD' | 'BANK_TRANSFER' | 'VNPAY'; icon: React.ReactNode; title: string; sub: string }[];
+
+  useEffect(() => { if (methods.length && !methods.some((m) => m.k === payment)) setPayment(methods[0].k); }, [methods.length]); // eslint-disable-line
+  useEffect(() => { if (!deliveryDate && days.length) setDeliveryDate(ymd(days[0])); }, [days, deliveryDate]);
+
+  useEffect(() => {
+    if (!loading && !user) router.replace(`/login?next=${sh('/checkout')}`);
+    if (!user) return;
+    api<Address[]>('/addresses').then((list) => {
+      setAddresses(list);
+      const def = list.find((a) => a.isDefault) ?? list[0];
+      if (def) { setAddrId(def.id); setForm((f) => ({ ...f, customerName: def.fullName, phone: def.phone })); setParts(toParts(def)); setPin(def.lat != null && def.lng != null ? { lat: def.lat, lng: def.lng } : null); }
+      else setForm((f) => ({ ...f, customerName: user.fullName, phone: user.phone ?? '' }));
+    });
+  }, [user, loading, router]);
+
+  const runPreview = async (code?: string) => {
+    try { setPreview(await api<Preview>('/orders/preview', { method: 'POST', json: { items: lineItems, couponCode: code, ...(pin && { lat: pin.lat, lng: pin.lng }) } })); setError(''); return true; }
+    catch (e: any) { setError(e.message); return false; }
+  };
+  // Tính lại khi giỏ hoặc vị trí giao thay đổi (phí ship theo km)
+  useEffect(() => { if (cart.items.length) runPreview(applied); }, [cart.items.length, pin?.lat, pin?.lng]); // eslint-disable-line
+
+  const applyCoupon = async () => {
+    if (!coupon.trim()) return;
+    if (await runPreview(coupon.trim())) { setApplied(coupon.trim().toUpperCase()); toast('Áp dụng mã giảm giá thành công'); }
+    else await runPreview(applied);
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (settings.deliverySlots.length && !deliverySlot) return setError('Vui lòng chọn khung giờ giao hàng');
+    if (!isComplete(parts)) return setError('Chọn đủ Tỉnh/Thành phố, Quận/Huyện, Phường/Xã và nhập số nhà, tên đường');
+    if (preview?.shipping?.needPin) return setError('Vui lòng ghim vị trí giao hàng trên bản đồ để tính phí ship theo quãng đường');
+    if (preview?.shipping?.outOfRange) return setError(`${preview.shipping.note} – cửa hàng chưa giao tới khu vực này`);
+    setSubmitting(true);
+    try {
+      const order = await api<Order>('/orders', {
+        method: 'POST',
+        json: { ...form, addressParts: toPayload(parts), items: lineItems, couponCode: applied, paymentMethod: payment, ...(wantInvoice && settings.einvoice?.enabled && { einvoice: cleanEInvoice({ ...invoice, buyerName: invoice.buyerName || form.customerName }) }), ...(settings.deliverySlots.length && { deliveryDate, deliverySlot }), ...(pin && { lat: pin.lat, lng: pin.lng }) },
+      });
+      if (addrId === 'new' && !addresses.length) api('/addresses', { method: 'POST', json: { fullName: form.customerName, phone: form.phone, addressParts: toPayload(parts), isDefault: true, ...(pin && { lat: pin.lat, lng: pin.lng }) } }).catch(() => {});
+      // Cập nhật lại địa chỉ đã lưu (bổ sung Tỉnh/Huyện/Xã cho địa chỉ cũ, vị trí ghim mới)
+      const saved = addresses.find((a) => a.id === addrId);
+      const pinChanged = !!pin && (saved?.lat !== pin.lat || saved?.lng !== pin.lng);
+      if (saved && (saved.provinceCode == null || pinChanged))
+        api(`/addresses/${saved.id}`, { method: 'PATCH', json: { fullName: saved.fullName, phone: saved.phone, addressParts: toPayload(parts), ...(pin && { lat: pin.lat, lng: pin.lng }) } }).catch(() => {});
+      cart.clear();
+      if (payment === 'VNPAY') {
+        const { paymentUrl } = await api<{ paymentUrl: string }>('/payments/vnpay/create', { method: 'POST', json: { orderId: order.id } });
+        window.location.href = paymentUrl;
+        return;
+      }
+      router.push(`/orders/${order.id}?success=1`);
+    } catch (e: any) { setError(e.message); setSubmitting(false); }
+  };
+
+  if (loading || !user) return <Spinner />;
+  if (!cart.items.length) return <div className="container-x py-16 text-center"><p className="mb-4 text-slate-500">Giỏ hàng trống.</p><Link href={sh('/products')} className="btn-primary">Mua sắm ngay</Link></div>;
+
+  return (
+    <form onSubmit={submit} className="container-x py-8">
+      <h1 className="mb-6 text-2xl font-bold">Thanh toán</h1>
+      <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+        <div className="space-y-5">
+          <section className="card space-y-4">
+            <h2 className="flex items-center gap-2 font-bold text-ink"><MapPin className="h-5 w-5 text-brand-600" /> Địa chỉ nhận hàng</h2>
+            {addresses.length > 0 && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {addresses.map((a) => (
+                  <label key={a.id} className={`cursor-pointer rounded-xl border-2 p-3.5 text-sm transition ${addrId === a.id ? 'border-brand-600 bg-brand-50/50' : 'border-slate-200 hover:border-slate-300'}`}>
+                    <input type="radio" className="sr-only" checked={addrId === a.id} onChange={() => { setAddrId(a.id); setForm({ ...form, customerName: a.fullName, phone: a.phone }); setParts(toParts(a)); setPin(a.lat != null && a.lng != null ? { lat: a.lat, lng: a.lng } : null); }} />
+                    <div className="font-semibold text-ink">{a.fullName} · {a.phone} {a.isDefault && <span className="badge ml-1 bg-brand-100 text-brand-800">Mặc định</span>}</div>
+                    <div className="mt-1 text-slate-500">{a.label && <b>{a.label}: </b>}{a.address}</div>
+                    {a.provinceCode == null && <div className="mt-1 text-xs text-amber-600">Cần chọn lại Tỉnh/Huyện/Xã</div>}
+                  </label>
+                ))}
+                <label className={`flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed p-3.5 text-sm font-medium transition ${addrId === 'new' ? 'border-brand-600 text-brand-700' : 'border-slate-200 text-slate-500'}`}>
+                  <input type="radio" className="sr-only" checked={addrId === 'new'} onChange={() => { setAddrId('new'); setForm({ ...form, customerName: user.fullName, phone: '' }); setParts(EMPTY_ADDRESS); setPin(null); }} />+ Giao đến địa chỉ khác
+                </label>
+              </div>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div><label className="label">Họ tên người nhận *</label><input className="input" required value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} /></div>
+              <div><label className="label">Số điện thoại *</label><input className="input" required inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+            </div>
+            <AddressFields label="Địa chỉ giao hàng" testId="ship-addr" value={parts} onChange={setParts}
+              hint={addresses.find((a) => a.id === addrId && a.provinceCode == null) ? `Địa chỉ đã lưu chưa có Tỉnh/Huyện/Xã: ${addresses.find((a) => a.id === addrId)!.address} – chọn lại đầy đủ (sẽ tự cập nhật vào sổ địa chỉ)` : undefined} />
+            <LocationPicker value={pin} onChange={setPin} address={parts} title="Vị trí giao hàng" hint={settings.shippingMode === 'DISTANCE' ? 'Bắt buộc: phí ship được tính theo quãng đường từ cửa hàng tới vị trí này. Ghim đúng giúp tài xế tìm nhà nhanh.' : 'Ghim đúng vị trí giúp tài xế tìm nhà nhanh và bạn theo dõi được tài xế trên bản đồ (không bắt buộc).'} />
+            <div><label className="label">Ghi chú cho cửa hàng</label><textarea className="input" rows={2} placeholder="VD: Gọi trước khi giao, chọn rau non…" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></div>
+          </section>
+
+          {settings.einvoice?.enabled && (
+            <section className="card space-y-4">
+              <label className="flex cursor-pointer items-center gap-3">
+                <input type="checkbox" className="h-4 w-4" checked={wantInvoice} onChange={(e) => setWantInvoice(e.target.checked)} />
+                <span><span className="font-bold text-ink">Xuất hoá đơn điện tử</span><span className="block text-sm text-slate-500">Cửa hàng phát hành hoá đơn điện tử theo thông tin bạn cung cấp</span></span>
+              </label>
+              {wantInvoice && <EInvoiceFields value={{ ...invoice, buyerName: invoice.buyerName || form.customerName }} onChange={setInvoice} />}
+            </section>
+          )}
+
+          {settings.deliverySlots.length > 0 && (
+            <section className="card space-y-4">
+              <h2 className="flex items-center gap-2 font-bold text-ink"><CalendarDays className="h-5 w-5 text-brand-600" /> Thời gian giao hàng</h2>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {days.map((d, i) => {
+                  const v = ymd(d);
+                  return (
+                    <button type="button" key={v} onClick={() => setDeliveryDate(v)} className={`flex min-w-[76px] flex-col items-center rounded-xl border-2 px-3 py-2 transition ${deliveryDate === v ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 hover:border-slate-300'}`}>
+                      <span className="text-xs font-medium">{i === 0 ? 'Hôm nay' : i === 1 ? 'Ngày mai' : WD[d.getDay()]}</span>
+                      <span className="text-lg font-bold">{pad(d.getDate())}/{pad(d.getMonth() + 1)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {settings.deliverySlots.map((s) => <button type="button" key={s} onClick={() => setDeliverySlot(s)} className={`chip ${deliverySlot === s ? 'chip-active' : ''}`}>{s}</button>)}
+              </div>
+            </section>
+          )}
+
+          <section className="card space-y-3">
+            <h2 className="flex items-center gap-2 font-bold text-ink"><CreditCard className="h-5 w-5 text-brand-600" /> Phương thức thanh toán</h2>
+            {methods.map((m) => (
+              <label key={m.k} className={`flex cursor-pointer items-center gap-4 rounded-xl border-2 p-4 transition ${payment === m.k ? 'border-brand-600 bg-brand-50/50' : 'border-slate-200 hover:border-slate-300'}`}>
+                <input type="radio" className="h-4 w-4 accent-brand-600" checked={payment === m.k} onChange={() => setPayment(m.k)} />
+                <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${payment === m.k ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{m.icon}</span>
+                <span><span className="block font-semibold text-ink">{m.title}</span><span className="text-sm text-slate-500">{m.sub}</span></span>
+              </label>
+            ))}
+            {payment === 'BANK_TRANSFER' && <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-800">Sau khi đặt hàng, mã QR kèm sẵn số tiền & nội dung chuyển khoản sẽ hiển thị để bạn quét.</p>}
+            {payment === 'VNPAY' && <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-800">Bạn sẽ được chuyển sang cổng VNPay để thanh toán an toàn.</p>}
+          </section>
+        </div>
+
+        <aside className="space-y-4 lg:sticky lg:top-36 lg:self-start">
+          <div className="card space-y-4">
+            <h2 className="font-bold text-ink">Đơn hàng ({cart.count} sản phẩm)</h2>
+            <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+              {cart.items.map((i) => (
+                <div key={i.variantId} className="flex gap-3 text-sm">
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={imageUrl(i.image)} alt="" className="h-14 w-14 rounded-lg border border-slate-100 object-cover" />
+                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-700 px-1 text-[10px] font-bold text-white">{i.quantity}</span>
+                  </div>
+                  <div className="min-w-0 flex-1"><div className="line-clamp-1 font-medium text-ink">{i.productName}</div><div className="text-xs text-slate-400">{i.variantName}</div></div>
+                  <div className="font-semibold">{money(i.price * i.quantity)}</div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 border-t border-slate-100 pt-4">
+              <div className="relative flex-1"><TicketPercent className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className="input pl-9 uppercase" placeholder="Mã giảm giá" value={coupon} onChange={(e) => setCoupon(e.target.value)} /></div>
+              <button type="button" className="btn-outline" onClick={applyCoupon}>Áp dụng</button>
+            </div>
+            {applied && (
+              <div className="flex items-center justify-between rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800">
+                <span>Mã <b>{applied}</b> đã được áp dụng</span>
+                <button type="button" className="text-xs font-semibold text-red-600" onClick={() => { setApplied(undefined); setCoupon(''); runPreview(); }}>Bỏ</button>
+              </div>
+            )}
+            {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+            {preview && (
+              <div className="space-y-2 border-t border-slate-100 pt-4 text-sm">
+                <div className="flex justify-between"><span>Tạm tính</span><span className="font-medium text-ink">{money(preview.subtotal)}</span></div>
+                {preview.discount > 0 && <div className="flex justify-between text-red-600"><span>Giảm giá</span><span>-{money(preview.discount)}</span></div>}
+                <div className="flex justify-between"><span>Phí giao hàng{preview.shipping?.mode === 'DISTANCE' && preview.shipping.km != null && <span className="text-slate-400"> · {preview.shipping.km} km</span>}</span>
+                  <span className="font-medium text-ink">{preview.shipping?.needPin ? 'Ghim vị trí để tính' : preview.shippingFee ? money(preview.shippingFee) : preview.shipping?.freeShip ? <><s className="mr-1 text-slate-400">{money(preview.shipping.fee)}</s>Miễn phí</> : 'Miễn phí'}</span></div>
+                {(preview.shipping?.needPin || preview.shipping?.outOfRange) && <p className={`rounded-lg p-2 text-xs ${preview.shipping.outOfRange ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800'}`}>{preview.shipping.note}</p>}
+                <div className="flex items-end justify-between border-t border-slate-100 pt-3"><span className="font-semibold text-ink">Tổng thanh toán</span><span className="text-2xl font-extrabold text-brand-700">{money(preview.total)}</span></div>
+              </div>
+            )}
+            <button className="btn-primary btn-lg w-full" disabled={submitting || !preview || !!preview.shipping?.needPin || !!preview.shipping?.outOfRange}>
+              <Lock className="h-4 w-4" />{submitting ? 'Đang xử lý…' : payment === 'VNPAY' ? 'Đặt hàng & thanh toán VNPay' : 'Đặt hàng'}
+            </button>
+          </div>
+        </aside>
+      </div>
+    </form>
+  );
+}

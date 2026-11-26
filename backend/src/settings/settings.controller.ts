@@ -1,11 +1,13 @@
 import { Body, Controller, Get, Put } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { Matches } from 'class-validator';
-import { Auth } from '../common/decorators';
+import { SuperOnly } from '../common/decorators';
 import { PrismaService } from '../prisma/prisma.service';
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
-const DEFAULT_THEME = { primary: '#059669', accent: '#ef4444', sidebar: '#111827' };
+const KEY = 'theme';
+/** Trùng màu gốc trong frontend/src/app/globals.css (brand-600, accent-500, ink) */
+export const DEFAULT_THEME = { primary: '#0a9c4b', accent: '#f97316', sidebar: '#0f172a' };
 
 export class UpdateThemeDto {
   @Matches(HEX, { message: 'Màu chủ đạo phải dạng #RRGGBB' }) primary: string;
@@ -13,20 +15,24 @@ export class UpdateThemeDto {
   @Matches(HEX, { message: 'Màu thanh bên phải dạng #RRGGBB' }) sidebar: string;
 }
 
+/** Màu giao diện toàn sàn – lưu bảng PlatformSetting (key "theme"), chỉ super admin được đổi */
 @Controller()
-export class SettingsController {
+export class ThemeController {
   constructor(private prisma: PrismaService) {}
 
-  /** Public: giao diện cửa hàng cần màu để render */
+  /** Public: giao diện cần màu để render */
   @Get('settings/theme') async get() {
-    const row = await this.prisma.setting.findUnique({ where: { key: 'theme' } });
+    const row = await this.prisma.platformSetting.findUnique({ where: { key: KEY } }).catch(() => null);
     return { ...DEFAULT_THEME, ...((row?.value as object) ?? {}) };
   }
 
-  /** Chỉ ADMIN (super admin) được đổi */
-  @Put('admin/settings/theme') @Auth(Role.ADMIN) async update(@Body() dto: UpdateThemeDto) {
+  @Put('super/settings/theme') @SuperOnly() async update(@Body() dto: UpdateThemeDto) {
     const value = { primary: dto.primary, accent: dto.accent, sidebar: dto.sidebar };
-    await this.prisma.setting.upsert({ where: { key: 'theme' }, create: { key: 'theme', value }, update: { value } });
+    await this.prisma.platformSetting.upsert({
+      where: { key: KEY },
+      create: { key: KEY, value: value as Prisma.InputJsonObject },
+      update: { value: value as Prisma.InputJsonObject },
+    });
     return value;
   }
 }

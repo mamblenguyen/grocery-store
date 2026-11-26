@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { paged, paginate, slugify } from '../common/utils';
+import { assertPlanLimit } from '../common/plan-limits';
+import { scope, storeId } from '../common/tenant';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueryProductsDto, SaveProductDto } from './dto/product.dto';
 
@@ -18,6 +20,10 @@ const detailInclude = {
 
 type ProductDetail = Prisma.ProductGetPayload<{ include: typeof detailInclude }>;
 
+/** Cột images kiểu JSON → luôn trả về mảng chuỗi */
+export const toImages = (v: Prisma.JsonValue | null): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+
 const listInclude = {
   category: { select: { id: true, name: true, slug: true } },
   variants: {
@@ -34,6 +40,7 @@ export class ProductsService {
   private format(p: ProductDetail) {
     return {
       ...p,
+      images: toImages(p.images),
       variants: p.variants.map(({ optionValues, ...v }) => ({
         ...v,
         optionValueIds: optionValues.map((o) => o.optionValueId),
@@ -45,35 +52,39 @@ export class ProductsService {
   }
 
   private async buildWhere(q: QueryProductsDto, admin: boolean): Promise<Prisma.ProductWhereInput> {
-    const where: Prisma.ProductWhereInput = {};
+    const where: Prisma.ProductWhereInput = { ...scope() };
     if (!admin) where.isActive = true;
     else if (q.status === 'active') where.isActive = true;
     else if (q.status === 'inactive') where.isActive = false;
 
     if (q.search) {
       where.OR = [
-        { name: { contains: q.search, mode: 'insensitive' } },
-        { brand: { contains: q.search, mode: 'insensitive' } },
-        { variants: { some: { OR: [{ sku: { contains: q.search, mode: 'insensitive' } }, { barcode: q.search }] } } },
+        { name: { contains: q.search } },
+        { brand: { contains: q.search } },
+        { variants: { some: { OR: [{ sku: { contains: q.search } }, { barcode: q.search }] } } },
       ];
     }
     if (q.category || q.categoryId) {
-      const cat = q.categoryId
-        ? await this.prisma.category.findUnique({ where: { id: q.categoryId }, include: { children: true } })
-        : await this.prisma.category.findUnique({ where: { slug: q.category! }, include: { children: true } });
-      where.categoryId = { in: cat ? [cat.id, ...cat.children.map((c) => c.id)] : [-1] };
+      // Chế độ "tất cả đối tác": lọc danh mục theo slug trên mọi cửa hàng
+      const cats = q.categoryId
+        ? await this.prisma.category.findMany({ where: { id: q.categoryId, ...scope() }, include: { children: true } })
+        : await this.prisma.category.findMany({ where: { slug: q.category!, ...scope() }, include: { children: true } });
+      const ids = cats.flatMap((c) => [c.id, ...c.children.map((x) => x.id)]);
+      where.categoryId = { in: ids.length ? ids : [-1] };
     }
-    if (q.brand) where.brand = { equals: q.brand, mode: 'insensitive' };
+    if (q.brand) where.brand = { equals: q.brand };
     if (q.minPrice !== undefined || q.maxPrice !== undefined) {
       where.minPrice = { ...(q.minPrice !== undefined && { gte: q.minPrice }), ...(q.maxPrice !== undefined && { lte: q.maxPrice }) };
     }
     if (q.featured) where.isFeatured = true;
-    if (q.inStock) where.variants = { some: { isActive: true, stock: { gt: 0 } } };
+    if (q.inStock || q.deals)
+      where.variants = { some: { isActive: true, ...(q.inStock && { stock: { gt: 0 } }), ...(q.deals && { compareAtPrice: { not: null } }) } };
     return where;
   }
 
-  private orderBy(sort?: string): Prisma.ProductOrderByWithRelationInput {
+  private orderBy(sort?: string): Prisma.ProductOrderByWithRelationInput | Prisma.ProductOrderByWithRelationInput[] {
     switch (sort) {
+      case 'rating': return [{ ratingAvg: 'desc' }, { ratingCount: 'desc' }];
       case 'price_asc': return { minPrice: 'asc' };
       case 'price_desc': return { minPrice: 'desc' };
       case 'name': return { name: 'asc' };
@@ -90,37 +101,42 @@ export class ProductsService {
         where, skip, take, orderBy: this.orderBy(q.sort),
         include: {
           ...listInclude,
+          ...(admin && { store: { select: { id: true, name: true, slug: true } } }),
           variants: admin ? listInclude.variants : { ...listInclude.variants, where: { isActive: true } },
         },
       }),
       this.prisma.product.count({ where }),
     ]);
-    const mapped = items.map((p) => ({ ...p, totalStock: p.variants.reduce((s, v) => s + v.stock, 0) }));
+    const mapped = items.map((p) => ({
+      ...p,
+      images: toImages(p.images),
+      totalStock: p.variants.reduce((s, v) => s + v.stock, 0),
+    }));
     return paged(mapped, total, page, limit);
   }
 
   async brands() {
     const rows = await this.prisma.product.findMany({
-      where: { isActive: true, brand: { not: null } }, distinct: ['brand'], select: { brand: true }, orderBy: { brand: 'asc' },
+      where: { storeId: storeId(), isActive: true, brand: { not: null } }, distinct: ['brand'], select: { brand: true }, orderBy: { brand: 'asc' },
     });
     return rows.map((r) => r.brand);
   }
 
   async findBySlug(slug: string) {
     const p = await this.prisma.product.findFirst({
-      where: { slug, isActive: true },
+      where: { storeId: storeId(), slug, isActive: true },
       include: { ...detailInclude, variants: { ...detailInclude.variants, where: { isActive: true } } },
     });
     if (!p) throw new NotFoundException('Không tìm thấy sản phẩm');
     const related = await this.prisma.product.findMany({
-      where: { isActive: true, categoryId: p.categoryId, id: { not: p.id } },
+      where: { storeId: p.storeId, isActive: true, categoryId: p.categoryId, id: { not: p.id } },
       take: 8, orderBy: { soldCount: 'desc' }, include: listInclude,
     });
-    return { ...this.format(p), related };
+    return { ...this.format(p), related: related.map((r) => ({ ...r, images: toImages(r.images) })) };
   }
 
   async findById(id: number) {
-    const p = await this.prisma.product.findUnique({ where: { id }, include: detailInclude });
+    const p = await this.prisma.product.findFirst({ where: { id, ...scope() }, include: { ...detailInclude, store: { select: { id: true, name: true, slug: true } } } });
     if (!p) throw new NotFoundException('Không tìm thấy sản phẩm');
     return this.format(p);
   }
@@ -154,15 +170,20 @@ export class ProductsService {
 
   async save(dto: SaveProductDto, userId: number, id?: number) {
     this.validate(dto);
+    const sid = storeId();
+    if (id) await this.prisma.product.findFirstOrThrow({ where: { id, storeId: sid } }); // chỉ sửa sản phẩm của cửa hàng mình
+    else await assertPlanLimit(this.prisma, sid, 'products');
+    if (dto.categoryId) await this.prisma.category.findFirstOrThrow({ where: { id: dto.categoryId, storeId: sid } });
     const slug = slugify(dto.slug || dto.name);
-    const { options, variants, ...productData } = dto;
+    const { options, variants, images, ...rest } = dto;
+    const productData = { ...rest, ...(images !== undefined && { images }) };
     const prices = variants.map((v) => v.price);
 
     const productId = await this.prisma.$transaction(async (tx) => {
       const data = { ...productData, slug, minPrice: Math.min(...prices), maxPrice: Math.max(...prices) };
       const product = id
         ? await tx.product.update({ where: { id }, data })
-        : await tx.product.create({ data });
+        : await tx.product.create({ data: { ...data, storeId: sid } });
 
       // 1. Tạo lại options & values (xoá cũ -> cascade xoá bảng nối)
       await tx.productOption.deleteMany({ where: { productId: product.id } });
@@ -217,7 +238,7 @@ export class ProductsService {
               data: { ...vData, name, position: i, optionValues: { create: optionLinks } },
             })
           : await tx.productVariant.create({
-              data: { ...vData, name, position: i, productId: product.id, optionValues: { create: optionLinks } },
+              data: { ...vData, name, position: i, productId: product.id, storeId: sid, optionValues: { create: optionLinks } },
             });
         const change = saved.stock - (old?.stock ?? 0);
         if (change !== 0) {
@@ -235,11 +256,12 @@ export class ProductsService {
   }
 
   async toggle(id: number, field: 'isActive' | 'isFeatured') {
-    const p = await this.prisma.product.findUniqueOrThrow({ where: { id } });
+    const p = await this.prisma.product.findFirstOrThrow({ where: { id, ...scope() } });
     return this.prisma.product.update({ where: { id }, data: { [field]: !p[field] } });
   }
 
-  remove(id: number) {
+  async remove(id: number) {
+    await this.prisma.product.findFirstOrThrow({ where: { id, ...scope() } });
     return this.prisma.product.delete({ where: { id } });
   }
 }

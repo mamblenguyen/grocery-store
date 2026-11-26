@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { ImageUploader } from '@/components/admin/ImageUploader';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal, Spinner } from '@/components/ui';
 import { api, imageUrl } from '@/lib/api';
 import type { Category } from '@/lib/types';
@@ -36,7 +37,7 @@ export default function AdminCategoriesPage() {
   };
 
   const remove = async (c: Category) => {
-    if (!confirm(`Xoá danh mục "${c.name}"? Sản phẩm thuộc danh mục sẽ chuyển về "Không có danh mục".`)) return;
+    if (!(await confirmDialog(`Xoá danh mục "${c.name}"?`, 'Sản phẩm thuộc danh mục sẽ chuyển về "Không có danh mục".', 'Xoá', true))) return;
     try { await api(`/admin/categories/${c.id}`, { method: 'DELETE' }); toast('Đã xoá'); load(); }
     catch (e: any) { toast(e.message, 'error'); }
   };

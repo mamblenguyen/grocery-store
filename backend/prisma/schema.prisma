@@ -1,16 +1,27 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "rhel-openssl-3.0.x" = runtime của Vercel Functions (build trên GitHub Actions rồi deploy --prebuilt)
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
+  // Prisma 6 vẫn yêu cầu URL trong schema; Prisma 7 sẽ đọc URL từ prisma.config.ts.
   url      = env("DATABASE_URL")
 }
 
 enum Role {
-  ADMIN
-  STAFF
-  CUSTOMER
+  SUPER_ADMIN // quản trị nền tảng
+  ADMIN // chủ / quản lý cửa hàng
+  STAFF // nhân viên cửa hàng
+  CUSTOMER // khách hàng (dùng chung toàn nền tảng)
+  SHIPPER // tài xế giao hàng của sàn
+}
+
+enum StoreStatus {
+  ACTIVE
+  SUSPENDED // tạm khoá
+  CLOSED // ngừng hợp tác
 }
 
 enum OrderStatus {
@@ -24,6 +35,19 @@ enum OrderStatus {
 enum PaymentMethod {
   COD
   BANK_TRANSFER
+  VNPAY
+  CASH // bán tại quầy
+}
+
+enum OrderChannel {
+  ONLINE
+  POS
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
 }
 
 enum PaymentStatus {
@@ -38,34 +62,72 @@ enum DiscountType {
 }
 
 enum InventoryReason {
+  IMPORT // nhập kho (phiếu nhập / nhập nhanh)
+  EXPORT // xuất kho (hư hỏng, hết hạn, trả NCC, nội bộ)
+  STOCKTAKE // chênh lệch kiểm kê
+  ORDER // bán hàng
+  CANCEL // huỷ đơn hoàn kho
+  RETURN // khách đổi/trả hoàn kho
+  ADJUST // điều chỉnh tay
+}
+
+enum StockDocType {
   IMPORT
-  ORDER
-  CANCEL
-  ADJUST
+  EXPORT
+  STOCKTAKE
+}
+
+enum StockDocStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  fullName  String
-  phone     String?
-  address   String?
-  role      Role     @default(CUSTOMER)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             Int       @id @default(autoincrement())
+  email          String    @unique
+  password       String
+  fullName       String
+  phone          String?
+  address        String?   @db.Text
+  role           Role      @default(CUSTOMER)
+  /// Cửa hàng của ADMIN/STAFF; khách hàng & super admin: null
+  storeId        Int?
+  store          Store?    @relation("StoreMembers", fields: [storeId], references: [id], onDelete: SetNull)
+  isActive       Boolean   @default(true)
+  resetTokenHash String?
+  resetTokenExp  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  orders        Order[]
-  inventoryLogs InventoryLog[]
+  notifications  Notification[]
+  pushTokens     PushToken[]
+  orders         Order[]
+  createdOrders  Order[]         @relation("OrderCreatedBy")
+  inventoryLogs  InventoryLog[]
+  reviews        Review[]
+  wishlist       WishlistItem[]
+  addresses      Address[]
+  couponRecipients CouponRecipient[]
+  docsCreated    StockDocument[] @relation("DocCreatedBy")
+  docsCompleted  StockDocument[] @relation("DocCompletedBy")
+  storePayments  StorePayment[]
+  shipperProfile ShipperProfile?
+  deliveries     Delivery[]      @relation("ShipperDeliveries")
+  partnerApplications  PartnerApplication[] @relation("PartnerApplicant")
+  reviewedApplications PartnerApplication[] @relation("PartnerReviewer")
+
+  @@index([storeId])
 }
 
 model Category {
   id          Int        @id @default(autoincrement())
   name        String
-  slug        String     @unique
-  description String?
-  image       String?
+  slug        String
+  storeId     Int
+  store       Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  description String?    @db.Text
+  image       String?    @db.VarChar(1000)
   sortOrder   Int        @default(0)
   isActive    Boolean    @default(true)
   parentId    Int?
@@ -74,32 +136,43 @@ model Category {
   products    Product[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+
+  @@unique([storeId, slug])
 }
 
 model Product {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   name        String
-  slug        String   @unique
-  description String?
+  slug        String
+  storeId     Int
+  store       Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  description String?   @db.Text
   brand       String?
-  unit        String?  // đơn vị tính: gói, chai, hộp, kg...
-  thumbnail   String?
-  images      String[] @default([])
-  isActive    Boolean  @default(true)
-  isFeatured  Boolean  @default(false)
+  unit        String? // đơn vị tính: gói, chai, hộp, kg...
+  thumbnail   String?   @db.VarChar(1000)
+  images      Json? // mảng URL ảnh: ["https://...", ...]
+  isActive    Boolean   @default(true)
+  isFeatured  Boolean   @default(false)
   // Giá thấp nhất / cao nhất trong các biến thể (denormalized để lọc & sắp xếp)
-  minPrice    Int      @default(0)
-  maxPrice    Int      @default(0)
-  soldCount   Int      @default(0)
+  minPrice    Int       @default(0)
+  maxPrice    Int       @default(0)
+  soldCount   Int       @default(0)
+  ratingAvg   Float     @default(0)
+  ratingCount Int       @default(0)
   categoryId  Int?
   category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  /// Thuế suất GTGT: "0" | "5" | "8" | "10" | "KCT" (không chịu thuế) | "KKKNT"; null = theo mặc định của cửa hàng
+  vatRate     String?   @db.VarChar(8)
 
   options  ProductOption[]
   variants ProductVariant[]
+  reviews  Review[]
+  wishedBy WishlistItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([storeId, slug])
   @@index([categoryId])
   @@index([isActive, isFeatured])
 }
@@ -125,29 +198,36 @@ model ProductOptionValue {
 }
 
 model ProductVariant {
-  id                Int      @id @default(autoincrement())
+  id                Int     @id @default(autoincrement())
   productId         Int
-  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  sku               String   @unique
+  product           Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku               String
+  /// trùng với product.storeId – để SKU / mã vạch là duy nhất trong từng cửa hàng
+  storeId           Int
+  store             Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
   barcode           String?
-  name              String   // "1kg / Cay" – tự sinh từ option values
+  name              String // "1kg / Cay" – tự sinh từ option values
   price             Int
-  compareAtPrice    Int?     // giá gốc (gạch ngang)
-  costPrice         Int?     // giá nhập
-  stock             Int      @default(0)
-  lowStockThreshold Int      @default(5)
-  image             String?
-  isActive          Boolean  @default(true)
-  position          Int      @default(0)
+  compareAtPrice    Int? // giá gốc (gạch ngang)
+  costPrice         Int? // giá nhập
+  stock             Int     @default(0)
+  lowStockThreshold Int     @default(5)
+  image             String? @db.VarChar(1000)
+  isActive          Boolean @default(true)
+  position          Int     @default(0)
 
   optionValues  VariantOptionValue[]
   orderItems    OrderItem[]
   inventoryLogs InventoryLog[]
+  stockDocItems StockDocumentItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([storeId, sku])
   @@index([productId])
+  @@index([barcode])
+  @@index([storeId, barcode])
 }
 
 model VariantOptionValue {
@@ -160,30 +240,59 @@ model VariantOptionValue {
 }
 
 model Order {
-  id            Int           @id @default(autoincrement())
-  code          String        @unique
+  id            Int                  @id @default(autoincrement())
+  code          String               @unique
+  storeId       Int
+  store         Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
   userId        Int?
-  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user          User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdById   Int? // nhân viên tạo đơn (POS)
+  createdBy     User?                @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  channel       OrderChannel         @default(ONLINE)
+  deliveryDate  DateTime?            @db.Date
+  deliverySlot  String?
+  paidAt        DateTime?
+  cashReceived  Int? // tiền khách đưa (POS)
   customerName  String
   phone         String
-  address       String
-  note          String?
-  status        OrderStatus   @default(PENDING)
-  paymentMethod PaymentMethod @default(COD)
-  paymentStatus PaymentStatus @default(UNPAID)
+  address       String               @db.Text
+  /// Địa chỉ theo đơn vị hành chính (address giao hàng = chuỗi đầy đủ ghép từ các phần này)
+  street        String?              @db.VarChar(255)
+  provinceCode  Int?
+  provinceName  String?
+  districtCode  Int?
+  districtName  String?
+  wardCode      Int?
+  wardName      String?
+  note          String?              @db.Text
+  status        OrderStatus          @default(PENDING)
+  paymentMethod PaymentMethod        @default(COD)
+  paymentStatus PaymentStatus        @default(UNPAID)
   subtotal      Int
-  discount      Int           @default(0)
-  shippingFee   Int           @default(0)
+  discount      Int                  @default(0)
+  shippingFee   Int                  @default(0)
+  /// Quãng đường giao ước tính (km) dùng tính phí ship theo km; null = phí cố định
+  shippingKm    Float?
   total         Int
   couponCode    String?
-  cancelReason  String?
+  loyaltyPointsUsed Int                @default(0)
+  loyaltyDiscount   Int                @default(0)
+  promotionData Json?                /// snapshot khuyến mãi tự động đã áp dụng
+  cancelReason  String?              @db.Text
+  /// Vị trí giao hàng (khách ghim trên bản đồ / GPS)
+  dropoffLat    Float?
+  dropoffLng    Float?
+  delivery      Delivery?
+  einvoice      EInvoice?
   items         OrderItem[]
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  payments      PaymentTransaction[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
 
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([storeId, createdAt])
 }
 
 model OrderItem {
@@ -196,16 +305,23 @@ model OrderItem {
   productName String
   variantName String
   sku         String
-  image       String?
+  image       String?         @db.VarChar(1000)
   price       Int
+  costPrice   Int? // giá vốn tại thời điểm bán (báo cáo lợi nhuận)
+  /// Thuế suất GTGT tại thời điểm bán (snapshot) – xem Product.vatRate
+  vatRate     String?         @db.VarChar(8)
+  /// Đơn vị tính tại thời điểm bán (in trên hoá đơn)
+  unit        String?         @db.VarChar(50)
   quantity    Int
   total       Int
 }
 
 model Coupon {
   id            Int          @id @default(autoincrement())
-  code          String       @unique
-  description   String?
+  code          String
+  storeId       Int
+  store         Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  description   String?      @db.Text
   type          DiscountType @default(PERCENT)
   value         Int
   minOrderValue Int          @default(0)
@@ -215,28 +331,858 @@ model Coupon {
   startsAt      DateTime?
   endsAt        DateTime?
   isActive      Boolean      @default(true)
+  audienceAll   Boolean      @default(false)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+  recipients    CouponRecipient[]
+
+  @@unique([storeId, code])
 }
 
-// Cấu hình key/value (key "theme" lưu bảng màu giao diện)
-model Setting {
-  key       String   @id
-  value     Json
-  updatedAt DateTime @updatedAt
+model CouponRecipient {
+  id        Int      @id @default(autoincrement())
+  couponId  Int
+  userId    Int
+  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([couponId, userId])
+  @@index([userId])
+}
+
+/// Ghi nhận voucher cá nhân đã dùng, chống quét/lặp lại cùng ưu đãi.
+model CouponRedemption {
+  id        Int      @id @default(autoincrement())
+  couponId  Int
+  userId    Int
+  orderId   Int      @unique
+  storeId   Int
+  createdAt DateTime @default(now())
+
+  @@unique([couponId, userId])
+  @@index([storeId, createdAt])
 }
 
 model InventoryLog {
-  id        Int             @id @default(autoincrement())
-  variantId Int
-  variant   ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  change    Int
+  id         Int             @id @default(autoincrement())
+  variantId  Int
+  variant    ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  change     Int
   stockAfter Int
-  reason    InventoryReason
-  note      String?
-  userId    Int?
-  user      User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt DateTime        @default(now())
+  reason     InventoryReason
+  note       String?         @db.Text
+  unitCost   Int? // giá vốn của lần nhập/xuất
+  documentId Int?
+  document   StockDocument?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  userId     Int?
+  user       User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt  DateTime        @default(now())
 
   @@index([variantId])
+}
+
+model PaymentTransaction {
+  id            Int               @id @default(autoincrement())
+  orderId       Int
+  order         Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider      PaymentMethod
+  amount        Int
+  status        TransactionStatus @default(PENDING)
+  txnRef        String            @unique // mã giao dịch gửi sang cổng thanh toán
+  transactionNo String? // mã giao dịch phía cổng thanh toán / ngân hàng
+  bankCode      String?
+  responseCode  String?
+  message       String?           @db.Text
+  rawData       Json?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([orderId])
+}
+
+/// Cấu hình từng cửa hàng dạng key-value (key "store" chứa toàn bộ cài đặt)
+model Setting {
+  storeId   Int
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@id([storeId, key])
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int // 1-5
+  comment   String?  @db.Text
+  isVisible Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, userId])
+  @@index([productId, isVisible])
+}
+
+model WishlistItem {
+  userId    Int
+  productId Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, productId])
+}
+
+model Address {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label        String? // Nhà riêng, Công ty...
+  fullName     String
+  phone        String
+  address      String   @db.Text
+  /// Địa chỉ theo đơn vị hành chính (address = chuỗi đầy đủ ghép từ các phần này)
+  street       String?  @db.VarChar(255)
+  provinceCode Int?
+  provinceName String?
+  districtCode Int?
+  districtName String?
+  wardCode     Int?
+  wardName     String?
+  lat          Float?
+  lng          Float?
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Supplier {
+  id          Int             @id @default(autoincrement())
+  name        String
+  storeId     Int
+  store       Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  contactName String?
+  phone       String?
+  email       String?
+  address     String?         @db.Text
+  taxCode     String?
+  note        String?         @db.Text
+  isActive    Boolean         @default(true)
+  documents   StockDocument[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([storeId])
+}
+
+/// Phiếu kho: nhập (PN), xuất (PX), kiểm kê (KK)
+model StockDocument {
+  id            Int                 @id @default(autoincrement())
+  code          String
+  storeId       Int
+  store         Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  type          StockDocType
+  status        StockDocStatus      @default(DRAFT)
+  supplierId    Int?
+  supplier      Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  reason        String? // phiếu xuất: DAMAGED | EXPIRED | RETURN_SUPPLIER | INTERNAL | OTHER
+  invoiceNo     String? // số hoá đơn của nhà cung cấp
+  note          String?             @db.Text
+  totalQuantity Int                 @default(0)
+  totalAmount   Int                 @default(0)
+  createdById   Int?
+  createdBy     User?               @relation("DocCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  completedById Int?
+  completedBy   User?               @relation("DocCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+  cancelReason  String?             @db.Text
+  items         StockDocumentItem[]
+  logs          InventoryLog[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([storeId, code])
+  @@index([type, status])
+}
+
+model StockDocumentItem {
+  id         Int            @id @default(autoincrement())
+  documentId Int
+  document   StockDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  variantId  Int
+  variant    ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  /// Nhập/Xuất: số lượng. Kiểm kê: số lượng đếm thực tế
+  quantity   Int
+  /// Kiểm kê: tồn trên hệ thống tại thời điểm hoàn tất phiếu
+  systemQty  Int?
+  unitCost   Int            @default(0)
+  total      Int            @default(0)
+  lotNo      String?
+  expiryDate DateTime?      @db.Date
+  note       String?
+
+  @@index([documentId])
+}
+
+model Notification {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // ORDER_STATUS | PAYMENT | NEW_ORDER | SYSTEM
+  title     String
+  body      String    @db.Text
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+/// Expo push token của thiết bị (app điện thoại)
+model PushToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Gói dịch vụ dành cho đối tác
+model Plan {
+  id           Int            @id @default(autoincrement())
+  code         String         @unique
+  name         String
+  description  String?        @db.Text
+  priceMonthly Int            @default(0)
+  /// null = không giới hạn
+  maxProducts  Int?
+  maxStaff     Int?
+  /// Danh sách mã tính năng được cấp cho gói.
+  features     Json
+  maxOrdersMonthly Int?
+  maxCampaignsMonthly Int?
+  auditRetentionDays Int?
+  isActive     Boolean        @default(true)
+  sortOrder    Int            @default(0)
+  stores       Store[]
+  payments     StorePayment[]
+  applications PartnerApplication[]
+  purchases    StorePurchase[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+/// Cửa hàng (đối tác) trên nền tảng
+model Store {
+  id            Int         @id @default(autoincrement())
+  slug          String      @unique
+  name          String
+  phone         String?
+  email         String?
+  address       String?     @db.Text
+  logo          String?     @db.VarChar(1000)
+  status        StoreStatus @default(ACTIVE)
+  planId        Int?
+  plan          Plan?       @relation(fields: [planId], references: [id], onDelete: SetNull)
+  /// null = không thời hạn
+  planExpiresAt DateTime?
+  note          String?     @db.Text
+  /// Vị trí cửa hàng (điểm lấy hàng của tài xế)
+  lat           Float?
+  lng           Float?
+  /// Địa chỉ cửa hàng theo đơn vị hành chính (address = chuỗi đầy đủ ghép từ các phần này)
+  street        String?     @db.VarChar(255)
+  provinceCode  Int?
+  provinceName  String?
+  districtCode  Int?
+  districtName  String?
+  wardCode      Int?
+  wardName      String?
+
+  /// ── Thông tin đối tác (pháp lý, đối soát, hợp đồng) – chỉ super admin xem/sửa
+  businessName         String? /// Tên doanh nghiệp / hộ kinh doanh
+  businessType         String? /// HKD | CONG_TY | CA_NHAN
+  taxCode              String?
+  businessAddress      String?   @db.Text
+  /// Địa chỉ đăng ký kinh doanh theo Tỉnh/Huyện/Xã: { street, provinceCode, provinceName, districtCode, districtName, wardCode, wardName }
+  businessAddressParts Json?
+  representative       String? /// Người đại diện
+  representativeId     String? /// Số CCCD người đại diện
+  representativePhone  String?
+  bankName             String?
+  bankAccountNo        String?
+  bankAccountName      String?
+  contractNo           String?
+  contractSignedAt     DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  members        User[]           @relation("StoreMembers")
+  categories     Category[]
+  products       Product[]
+  variants       ProductVariant[]
+  orders         Order[]
+  coupons        Coupon[]
+  settings       Setting[]
+  suppliers      Supplier[]
+  stockDocuments StockDocument[]
+  payments       StorePayment[]
+  deliveries     Delivery[]
+  einvoices      EInvoice[]
+  application    PartnerApplication?
+  purchases      StorePurchase[]
+
+  @@index([provinceCode, districtCode])
+}
+
+/// Gói mua thêm (add-on): cộng thêm hạn mức vào gói chính, vd. +30 sản phẩm giá 150.000đ
+model AddonPack {
+  id          Int             @id @default(autoincrement())
+  code        String          @unique
+  name        String
+  description String?         @db.Text
+  /// products | staff | ordersMonthly | campaignsMonthly
+  kind        String          @db.VarChar(30)
+  /// Hạn mức cộng thêm cho 1 đơn vị gói
+  quantity    Int
+  /// Giá 1 đơn vị gói (đồng, đã gồm thuế)
+  price       Int
+  /// Thời hạn hiệu lực (tháng) tính từ khi kích hoạt; 0 = không thời hạn (dùng trọn đời gian hàng)
+  months      Int             @default(1)
+  isActive    Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  purchases   StorePurchase[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+enum PurchaseType {
+  ADDON
+  PLAN
+}
+
+enum PurchaseStatus {
+  PENDING
+  ACTIVE
+  CANCELLED
+}
+
+/// Đơn mua của cửa hàng: mua thêm hạn mức (ADDON) hoặc đổi / gia hạn gói chính (PLAN)
+model StorePurchase {
+  id            Int            @id @default(autoincrement())
+  /// Mã đơn – dùng làm nội dung chuyển khoản
+  code          String         @unique @db.VarChar(20)
+  storeId       Int
+  store         Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  type          PurchaseType
+  status        PurchaseStatus @default(PENDING)
+  /// Tên hiển thị (snapshot lúc mua)
+  name          String
+  // ADDON
+  packId        Int?
+  pack          AddonPack?     @relation(fields: [packId], references: [id], onDelete: SetNull)
+  kind          String?        @db.VarChar(30)
+  units         Int            @default(1)
+  /// Tổng hạn mức cộng thêm = quantity của gói × units
+  quantity      Int            @default(0)
+  // PLAN
+  planId        Int?
+  plan          Plan?          @relation(fields: [planId], references: [id], onDelete: SetNull)
+  /// Số tháng (PLAN: số tháng gia hạn; ADDON: thời hạn hiệu lực, 0 = không thời hạn)
+  months        Int            @default(1)
+  /// Thành tiền (đồng, đã gồm thuế)
+  amount        Int
+  startsAt      DateTime?
+  /// null = không thời hạn
+  expiresAt     DateTime?
+  paymentMethod String?
+  paymentRef    String?
+  paidAt        DateTime?
+  note          String?        @db.Text
+  /// SELF = cửa hàng tự mua · SUPER = super admin cấp · CONTRACT = kèm hợp đồng đăng ký
+  source        String         @default("SELF") @db.VarChar(20)
+  requestedById Int?
+  confirmedById Int?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([storeId, status])
+  @@index([status, createdAt])
+}
+
+/// Lịch sử gia hạn / thanh toán gói của đối tác
+model StorePayment {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  planId      Int?
+  plan        Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
+  months      Int
+  amount      Int
+  periodFrom  DateTime
+  periodTo    DateTime
+  method      String? // tiền mặt, chuyển khoản…
+  note        String?  @db.Text
+  createdById Int?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([storeId])
+}
+
+enum DeliveryStatus {
+  WAITING // chờ tài xế nhận
+  ASSIGNED // tài xế đã nhận, đang đến cửa hàng
+  PICKED_UP // đã lấy hàng, đang giao
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+/// Hồ sơ tài xế giao hàng (tài xế tự do của sàn, như Grab)
+model ShipperProfile {
+  userId      Int       @id
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicleType String    @default("XE_MAY") // XE_MAY | XE_DAP | O_TO
+  plateNumber String?
+  idNumber    String?
+  area        String?   @db.Text // tóm tắt vùng hoạt động (sinh từ areas)
+  /// Vùng hoạt động: [{ provinceCode, provinceName, districtCode?, districtName?, wardCode?, wardName? }] – rỗng = mọi nơi
+  areas       Json?
+  isOnline    Boolean   @default(false)
+  lat         Float?
+  lng         Float?
+  locationAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+/// Chuyến giao hàng của một đơn
+model Delivery {
+  id             Int            @id @default(autoincrement())
+  orderId        Int            @unique
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  storeId        Int
+  store          Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  shipperId      Int?
+  shipper        User?          @relation("ShipperDeliveries", fields: [shipperId], references: [id], onDelete: SetNull)
+  status         DeliveryStatus @default(WAITING)
+  /// Thu nhập của tài xế (= phí giao hàng của đơn)
+  fee            Int            @default(0)
+  /// Tiền thu hộ khi giao (COD), 0 nếu đã thanh toán online
+  codAmount      Int            @default(0)
+  distanceKm     Float?
+  pickupAddress  String         @db.Text
+  pickupLat      Float?
+  pickupLng      Float?
+  dropoffAddress String         @db.Text
+  dropoffLat     Float?
+  dropoffLng     Float?
+  shipperLat     Float?
+  shipperLng     Float?
+  shipperLocAt   DateTime?
+  failReason     String?        @db.Text
+  assignedAt     DateTime?
+  pickedUpAt     DateTime?
+  deliveredAt    DateTime?
+  failedAt       DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([status])
+  @@index([shipperId, status])
+  @@index([storeId])
+}
+
+/// Nhật ký thao tác bất biến phục vụ truy vết và kiểm toán.
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  storeId    Int?
+  userId     Int?
+  userEmail  String?
+  action     String
+  entity     String
+  entityId   String?
+  method     String?
+  path       String?
+  ip         String?
+  userAgent  String?  @db.VarChar(500)
+  beforeData Json?
+  afterData  Json?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([storeId, createdAt])
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+}
+
+/// Yêu cầu đổi/trả/hoàn tiền hoặc khiếu nại sau bán hàng.
+model ReturnRequest {
+  id             Int      @id @default(autoincrement())
+  code           String   @unique
+  storeId        Int
+  orderId        Int
+  userId         Int?
+  type           String   @default("RETURN")
+  status         String   @default("REQUESTED")
+  reason         String
+  customerNote   String?  @db.Text
+  adminNote      String?  @db.Text
+  evidence       Json?
+  items          Json
+  requestedAmount Int     @default(0)
+  approvedAmount Int?
+  refundMethod   String?
+  refundRef      String?
+  resolution     String?  @db.Text
+  reviewedById   Int?
+  reviewedAt     DateTime?
+  receivedAt     DateTime?
+  refundedAt     DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([storeId, status, createdAt])
+  @@index([orderId])
+  @@index([userId, createdAt])
+}
+
+/// Phiên đối soát thanh toán/COD theo cửa hàng và kỳ.
+model Reconciliation {
+  id             Int      @id @default(autoincrement())
+  code           String   @unique
+  storeId        Int
+  type           String
+  status         String   @default("DRAFT")
+  periodFrom     DateTime
+  periodTo       DateTime
+  expectedAmount Int      @default(0)
+  actualAmount   Int      @default(0)
+  difference     Int      @default(0)
+  itemCount      Int      @default(0)
+  details        Json?
+  note           String?  @db.Text
+  createdById    Int?
+  confirmedById  Int?
+  confirmedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([storeId, type, periodFrom])
+  @@index([status])
+}
+
+/// Ví điểm thành viên của khách tại từng cửa hàng.
+model LoyaltyAccount {
+  id             Int      @id @default(autoincrement())
+  storeId        Int
+  userId         Int
+  points         Int      @default(0)
+  lifetimePoints Int      @default(0)
+  tier           String   @default("MEMBER")
+  joinedAt       DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([storeId, userId])
+  @@index([storeId, tier])
+}
+
+/// Cấu hình hạng thành viên riêng của từng cửa hàng.
+model LoyaltyTierSetting {
+  id               Int      @id @default(autoincrement())
+  storeId          Int
+  key              String
+  name             String
+  minSpend         Int      @default(0)
+  benefits         Json
+  rewardCouponCode String?
+  sortOrder        Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([storeId, key])
+  @@index([storeId, minSpend])
+}
+
+model LoyaltyTransaction {
+  id        Int      @id @default(autoincrement())
+  storeId   Int
+  userId    Int
+  orderId   Int?
+  type      String
+  points    Int
+  balance   Int
+  note      String?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([storeId, userId, createdAt])
+  @@index([orderId])
+}
+
+/// QR động dùng một lần tại quầy; POS không cần nhập thông tin khách hàng.
+model PosLoyaltyToken {
+  id          Int       @id @default(autoincrement())
+  token       String    @unique @db.VarChar(96)
+  storeId     Int
+  userId      Int
+  couponCode  String?
+  pointsToUse Int       @default(0)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  orderId     Int?      @unique
+  createdAt   DateTime  @default(now())
+
+  @@index([storeId, expiresAt])
+  @@index([userId, createdAt])
+}
+
+/// Chương trình khuyến mãi dạng rule/action, dùng được cho combo, X tặng Y và flash sale.
+model Promotion {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  code        String
+  name        String
+  description String?  @db.Text
+  type        String
+  priority    Int      @default(0)
+  rules       Json
+  actions     Json
+  stackable   Boolean  @default(false)
+  usageLimit  Int?
+  usedCount   Int      @default(0)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([storeId, code])
+  @@index([storeId, isActive, startsAt, endsAt])
+}
+
+/// Phân khúc khách hàng phục vụ CRM.
+model CustomerSegment {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  name        String
+  description String?  @db.Text
+  rules       Json
+  isDynamic   Boolean  @default(true)
+  memberCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storeId])
+}
+
+/// Chiến dịch marketing và automation theo phân khúc/sự kiện.
+model MarketingCampaign {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  segmentId   Int?
+  name        String
+  type        String
+  status      String   @default("DRAFT")
+  triggerType String   @default("MANUAL")
+  triggerData Json?
+  subject     String?
+  content     String   @db.Text
+  couponCode  String?
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  totalCount  Int      @default(0)
+  sentCount   Int      @default(0)
+  failedCount Int      @default(0)
+  createdById Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storeId, status, scheduledAt])
+  @@index([segmentId])
+}
+
+// ───────────── Hoá đơn điện tử ─────────────
+enum EInvoiceStatus {
+  REQUESTED // người mua yêu cầu xuất hoá đơn, chờ cửa hàng phát hành
+  ISSUED // đã phát hành trên phần mềm HĐĐT của cửa hàng (đã ký số / đã có mã CQT)
+  CANCELLED // huỷ yêu cầu, hoặc hoá đơn đã bị thay thế / điều chỉnh (ghi lý do vào note)
+}
+
+/// Hoá đơn điện tử gắn với đơn hàng. Nền tảng KHÔNG tự lập hoá đơn có giá trị pháp lý: hoá đơn được lập, ký số
+/// và gửi cơ quan thuế qua phần mềm của tổ chức cung cấp dịch vụ HĐĐT mà cửa hàng đã ký hợp đồng
+/// (NĐ 123/2020 sửa đổi bởi NĐ 70/2025, TT 32/2025). Bảng này lưu yêu cầu của người mua + thông tin tra cứu.
+model EInvoice {
+  id               Int            @id @default(autoincrement())
+  storeId          Int
+  store            Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId          Int            @unique
+  order            Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status           EInvoiceStatus @default(REQUESTED)
+  /// CA_NHAN | TO_CHUC
+  buyerType        String         @default("CA_NHAN") @db.VarChar(16)
+  buyerName        String
+  buyerCompany     String?
+  /// MST người mua (10 hoặc 10-3 số; cá nhân dùng số định danh 12 số)
+  buyerTaxCode     String?        @db.VarChar(20)
+  /// Số định danh cá nhân / CCCD (người mua cá nhân, nếu cung cấp)
+  buyerIdNumber    String?        @db.VarChar(20)
+  buyerAddress     String?        @db.Text
+  buyerEmail       String?
+  /// Mẫu số (1 = HĐ GTGT, 2 = HĐ bán hàng)
+  templateCode     String?        @db.VarChar(4)
+  /// Ký hiệu hoá đơn 6 ký tự, vd C26MAA
+  series           String?        @db.VarChar(12)
+  number           String?        @db.VarChar(16)
+  /// Mã của cơ quan thuế (hoá đơn có mã)
+  taxAuthorityCode String?        @db.VarChar(64)
+  lookupCode       String?        @db.VarChar(64)
+  lookupUrl        String?        @db.VarChar(500)
+  provider         String?
+  issuedAt         DateTime?
+  issuedById       Int?
+  note             String?        @db.Text
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([storeId, status])
+}
+
+// ───────────── Đăng ký làm đối tác ─────────────
+enum PartnerAppStatus {
+  DRAFT // đang soạn, chưa nộp (tải giấy tờ từng file)
+  SUBMITTED // đã nộp, chờ thẩm định
+  NEED_INFO // super admin yêu cầu bổ sung
+  APPROVED // hồ sơ hợp lệ → đã gửi hợp đồng, chờ ký & thanh toán
+  ACTIVATED // đã ký + đã thanh toán → đã tạo cửa hàng & cấp quyền quản trị
+  REJECTED
+  CANCELLED // đối tác tự rút hồ sơ
+}
+
+model PartnerApplication {
+  id     Int              @id @default(autoincrement())
+  code   String           @unique
+  userId Int
+  user   User             @relation("PartnerApplicant", fields: [userId], references: [id], onDelete: Cascade)
+  status PartnerAppStatus @default(DRAFT)
+
+  // Cửa hàng
+  storeName         String
+  desiredSlug       String?
+  storePhone        String  @db.VarChar(20)
+  storeEmail        String?
+  storeAddressParts Json
+  storeAddress      String  @db.Text
+  /// Ngành hàng kinh doanh chính (thực phẩm khô, đồ uống, rau củ, rượu bia, thuốc lá…)
+  categories        String? @db.Text
+
+  // Pháp lý
+  /// HKD | CONG_TY
+  businessType         String    @db.VarChar(16)
+  businessName         String
+  taxCode              String    @db.VarChar(20)
+  /// Số Giấy chứng nhận đăng ký HKD / doanh nghiệp, ngày cấp, nơi cấp
+  licenseNo            String    @db.VarChar(50)
+  licenseDate          DateTime? @db.Date
+  licensePlace         String?
+  businessAddressParts Json?
+  businessAddress      String?   @db.Text
+  representative       String
+  representativeTitle  String?
+  representativeId     String    @db.VarChar(20)
+  representativeIdDate DateTime? @db.Date
+  representativePhone  String    @db.VarChar(20)
+  representativeEmail  String
+  bankName             String
+  bankAccountNo        String    @db.VarChar(30)
+  bankAccountName      String
+
+  // Gói dịch vụ đăng ký
+  planId Int?
+  plan   Plan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  months Int   @default(1)
+  /// Gói mua thêm chọn kèm khi đăng ký: [{ packId, units }]
+  addons Json?
+
+  // Đồng ý điều khoản & xử lý dữ liệu cá nhân
+  agreedTermsAt   DateTime
+  agreedPrivacyAt DateTime
+  submittedIp     String?  @db.VarChar(64)
+
+  // Thẩm định
+  reviewNote         String?   @db.Text
+  rejectReason       String?   @db.Text
+  /// Xác thực danh tính người bán (Luật TMĐT 2025): phương thức + thời điểm
+  identityMethod     String?
+  identityVerifiedAt DateTime?
+  reviewedById       Int?
+  reviewedBy         User?     @relation("PartnerReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt         DateTime?
+
+  // Hợp đồng điện tử
+  contractNo         String?   @unique
+  /// Snapshot điều khoản thương mại & thông tin 2 bên tại thời điểm gửi hợp đồng
+  contractData       Json?
+  /// SHA-256 nội dung hợp đồng đã gửi – chứng minh nội dung không bị sửa sau khi ký
+  contractHash       String?   @db.VarChar(64)
+  contractSentAt     DateTime?
+  contractSignedAt   DateTime?
+  contractSignerName String?
+  contractSignerIp   String?   @db.VarChar(64)
+  contractSignerUa   String?   @db.Text
+
+  // Thanh toán phí gói
+  paymentAmount Int?
+  paymentMethod String?
+  paymentRef    String?
+  paidAt        DateTime?
+
+  // Kích hoạt
+  storeId     Int?      @unique
+  store       Store?    @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  activatedAt DateTime?
+  /// Nhật ký xử lý: [{ at, by, action, note }]
+  history     Json?
+
+  documents PartnerDocument[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([status])
+  @@index([userId])
+}
+
+/// Giấy tờ đính kèm hồ sơ – lưu trong DB (không có URL công khai), chỉ người nộp & super admin xem được
+model PartnerDocument {
+  id            Int                @id @default(autoincrement())
+  applicationId Int
+  application   PartnerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  /// DKKD | CCCD_TRUOC | CCCD_SAU | ATTP | UY_QUYEN | GP_RUOU | GP_THUOC_LA | NGAN_HANG | KHAC
+  type          String             @db.VarChar(20)
+  fileName      String
+  mimeType      String             @db.VarChar(100)
+  size          Int
+  data          Bytes              @db.LongBlob
+  createdAt     DateTime           @default(now())
+
+  @@index([applicationId])
+}
+
+/// Cấu hình cấp sàn (không thuộc cửa hàng nào) – super admin chỉnh trong CMS. key "platform" = thông tin pháp nhân, thanh toán…
+model PlatformSetting {
+  key       String   @id @db.VarChar(64)
+  value     Json
+  updatedAt DateTime @updatedAt
 }

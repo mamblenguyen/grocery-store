@@ -1,13 +1,16 @@
 'use client';
 import Link from 'next/link';
+import { StoreTag, useOpenInStore } from '@/components/admin/AllStores';
 import { Fragment, useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Empty, Pagination, Spinner } from '@/components/ui';
 import { api, imageUrl, qs } from '@/lib/api';
 import { money } from '@/lib/format';
 import type { Category, Paged, Product } from '@/lib/types';
 
 export default function AdminProductsPage() {
+  const openInStore = useOpenInStore();
   const toast = useToast();
   const [cats, setCats] = useState<Category[]>([]);
   const [filter, setFilter] = useState({ search: '', categoryId: '', status: 'all', page: 1 });
@@ -55,6 +58,7 @@ export default function AdminProductsPage() {
                         <div>
                           <div className="font-medium">{p.name} {p.isFeatured && <span title="Nổi bật">⭐</span>}</div>
                           <div className="text-xs text-gray-500">{p.brand}</div>
+                          <StoreTag s={p.store} />
                         </div>
                       </div>
                     </td>
@@ -73,8 +77,8 @@ export default function AdminProductsPage() {
                       <button className="btn-outline btn-sm" onClick={() => action(() => api(`/admin/products/${p.id}/toggle-featured`, { method: 'PATCH' }), 'Đã cập nhật')}>
                         {p.isFeatured ? 'Bỏ nổi bật' : 'Nổi bật'}
                       </button>
-                      <Link href={`/admin/products/${p.id}`} className="btn-outline btn-sm">Sửa</Link>
-                      <button className="btn-danger btn-sm" onClick={() => confirm(`Xoá "${p.name}"?`) && action(() => api(`/admin/products/${p.id}`, { method: 'DELETE' }), 'Đã xoá')}>Xoá</button>
+                      <button onClick={() => openInStore(p.store, `/admin/products/${p.id}`)} className="btn-outline btn-sm">Sửa</button>
+                      <button className="btn-danger btn-sm" onClick={async () => { if (await confirmDialog(`Xoá "${p.name}"?`, 'Sản phẩm sẽ không thể khôi phục.', 'Xoá sản phẩm', true)) action(() => api(`/admin/products/${p.id}`, { method: 'DELETE' }), 'Đã xoá'); }}>Xoá</button>
                     </td>
                   </tr>
                   {expanded === p.id && (

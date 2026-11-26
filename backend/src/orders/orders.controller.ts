@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, ParseIntPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { AdminOnly, Auth, CurrentUser } from '../common/decorators';
 import {
-  CancelOrderDto, CreateOrderDto, PreviewOrderDto, QueryOrdersDto, UpdatePaymentDto, UpdateStatusDto,
+  CancelOrderDto, CreateOrderDto, EInvoiceRequestDto, IssueEInvoiceDto, PosOrderDto, PreviewOrderDto, QueryOrdersDto, UpdatePaymentDto, UpdateStatusDto,
 } from './dto/order.dto';
 import { OrdersService } from './orders.service';
 
@@ -31,6 +31,13 @@ export class OrdersController {
   ) {
     return this.service.cancelMine(id, userId, dto.reason);
   }
+
+  /** Khách yêu cầu xuất hoá đơn điện tử cho đơn của mình */
+  @Auth() @Post('my/:id/einvoice') requestEInvoice(
+    @Param('id', ParseIntPipe) id: number, @CurrentUser('sub') userId: number, @Body() dto: EInvoiceRequestDto,
+  ) {
+    return this.service.requestEInvoice(id, userId, dto);
+  }
 }
 
 @Controller('admin/orders')
@@ -40,6 +47,18 @@ export class AdminOrdersController {
 
   @Get() list(@Query() q: QueryOrdersDto) {
     return this.service.listAll(q);
+  }
+
+  @Get('export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="don-hang.csv"')
+  export(@Query() q: QueryOrdersDto) {
+    return this.service.exportCsv(q);
+  }
+
+  /** Bán tại quầy (POS) */
+  @Post('pos') pos(@Body() dto: PosOrderDto, @CurrentUser('sub') staffId: number) {
+    return this.service.createPos(dto, staffId);
   }
 
   @Get(':id') detail(@Param('id', ParseIntPipe) id: number) {
@@ -54,5 +73,10 @@ export class AdminOrdersController {
 
   @Patch(':id/payment') payment(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePaymentDto) {
     return this.service.updatePayment(id, dto.paymentStatus);
+  }
+
+  /** Ghi nhận hoá đơn điện tử đã phát hành trên phần mềm HĐĐT của cửa hàng / tạo yêu cầu tại quầy / huỷ */
+  @Put(':id/einvoice') einvoice(@Param('id', ParseIntPipe) id: number, @Body() dto: IssueEInvoiceDto, @CurrentUser('sub') actor: number) {
+    return this.service.saveEInvoice(id, dto, actor);
   }
 }

@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { MailModule } from './mail/mail.service';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ReportsModule } from './reports/reports.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -10,13 +14,32 @@ import { CouponsModule } from './coupons/coupons.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { UploadModule } from './upload/upload.module';
+import { HealthController } from './health.controller';
 import { SettingsModule } from './settings/settings.module';
+import { PaymentsModule } from './payments/payments.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { WishlistModule } from './wishlist/wishlist.module';
+import { AddressesModule } from './addresses/addresses.module';
+import { StockModule } from './stock/stock.module';
+import { SuperModule } from './super/super.module';
+import { StoresModule } from './stores/stores.module';
+import { MarketModule } from './market/market.module';
+import { DeliveryModule } from './delivery/delivery.module';
+import { GeoModule } from './geo/geo.module';
+import { OperationsModule } from './operations/operations.module';
+import { PartnersModule } from './partners/partners.module';
+import { BillingModule } from './billing/billing.module';
+import { PlatformModule } from './common/platform';
+import { AuditInterceptor } from './operations/audit.interceptor';
 
 @Module({
   imports: [
-    // ThrottlerGuard chỉ gắn ở từng route nhạy cảm (login/register/coupon validate)
-    ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 60 }]),
+    // Giới hạn chung 1000 request/phút/IP; các API đăng nhập có giới hạn riêng chặt hơn
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 1000 }]),
     PrismaModule,
+    MailModule,
+    NotificationsModule,
+    ReportsModule,
     AuthModule,
     UsersModule,
     CategoriesModule,
@@ -27,6 +50,25 @@ import { SettingsModule } from './settings/settings.module';
     DashboardModule,
     UploadModule,
     SettingsModule,
+    PaymentsModule,
+    ReviewsModule,
+    WishlistModule,
+    AddressesModule,
+    StockModule,
+    SuperModule,
+    StoresModule,
+    MarketModule,
+    DeliveryModule,
+    GeoModule,
+    OperationsModule,
+    PlatformModule,
+    PartnersModule,
+    BillingModule,
+  ],
+  controllers: [HealthController],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
 })
 export class AppModule {}

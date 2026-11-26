@@ -1,15 +1,15 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, UseGuards } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AdminOnly } from '../common/decorators';
 import { SaveCouponDto, ValidateCouponDto } from './coupons.dto';
 import { CouponsService } from './coupons.service';
+import { PlanFeature } from '../common/plan-features';
 
 @Controller('coupons')
 export class CouponsController {
   constructor(private service: CouponsService) {}
 
-  @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('validate') async validate(@Body() dto: ValidateCouponDto) {
     const { coupon, discount } = await this.service.apply(dto.code, dto.subtotal);
     return { code: coupon.code, description: coupon.description, discount };
@@ -18,8 +18,15 @@ export class CouponsController {
 
 @Controller('admin/coupons')
 @AdminOnly()
+@PlanFeature('COUPONS')
 export class AdminCouponsController {
   constructor(private service: CouponsService) {}
+
+  /** POS: kiểm tra mã giảm giá của cửa hàng đang quản trị */
+  @Post('validate') async validate(@Body() dto: ValidateCouponDto) {
+    const { coupon, discount } = await this.service.apply(dto.code, dto.subtotal);
+    return { code: coupon.code, description: coupon.description, discount };
+  }
 
   @Get() list() {
     return this.service.list();
