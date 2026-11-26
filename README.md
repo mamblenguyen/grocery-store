@@ -132,3 +132,5 @@ Payload tạo sản phẩm có biến thể:
 
 **backend/.env**: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `SHIPPING_FEE`, `FREE_SHIPPING_THRESHOLD`
 **frontend/.env.local**: `NEXT_PUBLIC_API_URL`
+
+> ⚠️ `JWT_SECRET` là **bắt buộc** khi `NODE_ENV=production` và phải dài tối thiểu 32 ký tự (tạo bằng `openssl rand -hex 32`); nếu thiếu/ngắn, app báo lỗi và dừng ngay khi khởi động. Ở dev, thiếu `JWT_SECRET` chỉ log cảnh báo và dùng secret ngẫu nhiên tạm thời (token mất hiệu lực sau mỗi lần restart).
