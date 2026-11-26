@@ -3,6 +3,7 @@ import { IsNumber, IsOptional, Max, Min, ValidateIf } from 'class-validator';
 import { Body, Controller, Get, Global, Module, Put } from '@nestjs/common';
 import { AdminOnly, StoreOwner } from '../common/decorators';
 import { AddressPartsDto } from '../geo/vn-address';
+import { ThemeController } from './settings.controller';
 import { SettingsService } from './settings.service';
 import { StoreSettings } from './settings.types';
 
@@ -46,7 +47,7 @@ export class AdminSettingsController {
 
 @Global()
 @Module({
-  controllers: [SettingsController, AdminSettingsController],
+  controllers: [SettingsController, AdminSettingsController, ThemeController],
   providers: [SettingsService],
   exports: [SettingsService],
 })

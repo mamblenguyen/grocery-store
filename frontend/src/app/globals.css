@@ -17,6 +17,8 @@
   --color-accent-500: #f97316;
   --color-accent-600: #ea580c;
   --color-ink: #0f172a;
+  /* Thanh bên quản trị – đổi được tại Super admin → Giao diện */
+  --color-sidebar: #0f172a;
   --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px rgb(15 23 42 / 0.06);
   --shadow-lift: 0 10px 30px -10px rgb(15 23 42 / 0.18);
   --animate-fade-in: fade-in 0.2s ease-out;

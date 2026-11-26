@@ -85,7 +85,7 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
       <nav className="no-print fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         {nav('/', <Home className="h-5 w-5" />, 'Sàn')}
         {nav('/stores', <Store className="h-5 w-5" />, 'Cửa hàng', pathname.startsWith('/stores'))}
-        {nav('/cart', <span className="relative"><ShoppingCart className="h-5 w-5" />{count > 0 && <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{count}</span>}</span>, 'Giỏ hàng')}
+        {nav('/cart', <span className="relative"><ShoppingCart className="h-5 w-5" />{count > 0 && <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-bold text-white">{count}</span>}</span>, 'Giỏ hàng')}
         {nav('/orders', <Package className="h-5 w-5" />, 'Đơn hàng', pathname.startsWith('/orders'))}
         {nav(user ? '/account' : '/login', <User className="h-5 w-5" />, user ? 'Tài khoản' : 'Đăng nhập', pathname.startsWith('/account') || pathname === '/login')}
       </nav>

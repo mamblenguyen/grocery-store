@@ -1,5 +1,5 @@
 'use client';
-import { BadgeCheck, Bike, Boxes, FileCheck2, LayoutDashboard, LogOut, Menu, PackagePlus, ReceiptText, Settings, ShieldCheck, Store, Users, X } from 'lucide-react';
+import { BadgeCheck, Bike, Boxes, FileCheck2, LayoutDashboard, LogOut, Menu, PackagePlus, Palette, ReceiptText, Settings, ShieldCheck, Store, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -17,6 +17,7 @@ const MENU = [
   { href: '/super/plans', label: 'Gói dịch vụ', icon: BadgeCheck },
   { href: '/super/addons', label: 'Gói mua thêm & đơn mua', icon: PackagePlus },
   { href: '/super/platform', label: 'Cấu hình sàn', icon: Settings },
+  { href: '/super/theme', label: 'Giao diện', icon: Palette },
   { href: '/super/payments', label: 'Phiếu thu phí', icon: ReceiptText },
   { href: '/super/users', label: 'Người dùng', icon: Users },
 ];

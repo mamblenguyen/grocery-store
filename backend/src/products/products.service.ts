@@ -203,7 +203,29 @@ export class ProductsService {
       const existing = await tx.productVariant.findMany({ where: { productId: product.id } });
       const existingMap = new Map(existing.map((v) => [v.id, v]));
       const keepIds = variants.filter((v) => v.id && existingMap.has(v.id)).map((v) => v.id!);
-      await tx.productVariant.deleteMany({ where: { productId: product.id, id: { notIn: keepIds } } });
+      // Biến thể bị bỏ: đã có lịch sử (đơn hàng / log kho) thì ẩn, chưa có thì xoá cứng
+      const removed = existing.filter((v) => !keepIds.includes(v.id));
+      if (removed.length) {
+        const withHistory = await tx.productVariant.findMany({
+          where: {
+            id: { in: removed.map((v) => v.id) },
+            OR: [{ orderItems: { some: {} } }, { inventoryLogs: { some: {} } }],
+          },
+          select: { id: true },
+        });
+        const historyIds = new Set(withHistory.map((v) => v.id));
+        for (const v of removed) {
+          if (!historyIds.has(v.id)) continue;
+          const suffix = `#deleted-${v.id}`;
+          await tx.productVariant.update({
+            where: { id: v.id },
+            data: { isActive: false, sku: v.sku.endsWith(suffix) ? v.sku : `${v.sku}${suffix}` },
+          });
+        }
+        await tx.productVariant.deleteMany({
+          where: { id: { in: removed.filter((v) => !historyIds.has(v.id)).map((v) => v.id) } },
+        });
+      }
 
       for (const [i, v] of variants.entries()) {
         const { id: vid, optionValues, ...vData } = v;

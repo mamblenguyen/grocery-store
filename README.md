@@ -267,3 +267,5 @@ Trình duyệt chỉ cho mở camera trên **HTTPS** hoặc **http://localhost**
 
 **backend/.env**: `SHIPPER_MIN_FEE`, `SHIPPER_MAX_ACTIVE` (giao hàng), `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `CORS_ORIGIN`, `BLOB_READ_WRITE_TOKEN`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_URL`, `VNPAY_RETURN_URL`
 **frontend/.env.local**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_ROOT_DOMAIN` (bật subdomain cho đối tác), `NEXT_PUBLIC_PLATFORM_NAME` (tên nền tảng, mặc định "Chợ Tạp Hoá"), `NEXT_PUBLIC_PLATFORM_HOTLINE` (hiện ở trang giới thiệu cho đối tác)
+
+> ⚠️ `JWT_SECRET` là **bắt buộc** khi `NODE_ENV=production` và phải dài tối thiểu 32 ký tự (tạo bằng `openssl rand -hex 32`); nếu thiếu/ngắn, app báo lỗi và dừng ngay khi khởi động. Ở dev, thiếu `JWT_SECRET` chỉ log cảnh báo và dùng secret ngẫu nhiên tạm thời (token mất hiệu lực sau mỗi lần restart).

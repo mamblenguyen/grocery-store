@@ -13,7 +13,9 @@
     "db:seed": "prisma db seed",
     "db:seed:customers": "tsx prisma/seed-demo-customers.ts",
     "db:migrate:deploy": "prisma migrate deploy",
-    "create-super-admin": "tsx prisma/create-super-admin.ts"
+    "create-super-admin": "tsx prisma/create-super-admin.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.spec.ts\""
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",
@@ -21,7 +23,7 @@
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/platform-express": "^11.1.0",
     "@nestjs/swagger": "^11.4.8",
-    "@nestjs/throttler": "^6.7.1",
+    "@nestjs/throttler": "^6.8.0",
     "@prisma/client": "6.19.3",
     "@vercel/blob": "^2.8.2",
     "bcryptjs": "^3.0.2",

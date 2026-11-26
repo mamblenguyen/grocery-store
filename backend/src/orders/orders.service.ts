@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { isAllStores, isExpired, scope, storeId, tenant } from '../common/tenant';
-import { paged, paginate } from '../common/utils';
+import { buildDateRange, paged, paginate } from '../common/utils';
 import { CouponsService } from '../coupons/coupons.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.module';
@@ -216,7 +216,15 @@ export class OrdersService {
       if (calc.shipping?.outOfRange) throw new BadRequestException(`Địa chỉ giao hàng ${calc.shipping.note.charAt(0).toLowerCase()}${calc.shipping.note.slice(1)} – cửa hàng chưa giao tới khu vực này`);
       const code = this.genCode();
       await this.deductStock(tx, calc.lines, code, userId);
-      if (calc.couponId) await tx.coupon.update({ where: { id: calc.couponId }, data: { usedCount: { increment: 1 } } });
+      if (calc.couponId) {
+        // Tăng lượt dùng có điều kiện để tránh vượt usageLimit khi nhiều người đặt cùng lúc
+        const c = await tx.coupon.findUniqueOrThrow({ where: { id: calc.couponId }, select: { usageLimit: true } });
+        const r = await tx.coupon.updateMany({
+          where: { id: calc.couponId, OR: [{ usageLimit: null }, ...(c.usageLimit !== null ? [{ usedCount: { lt: c.usageLimit } }] : [])] },
+          data: { usedCount: { increment: 1 } },
+        });
+        if (r.count === 0) throw new BadRequestException('Mã giảm giá đã hết lượt sử dụng');
+      }
       for (const promo of calc.appliedPromotions) await tx.promotion.update({ where: { id: promo.id }, data: { usedCount: { increment: 1 } } });
       return tx.order.create({
         data: {
@@ -265,7 +273,15 @@ export class OrdersService {
         throw new BadRequestException('Tiền khách đưa chưa đủ');
       const code = this.genCode('HD');
       await this.deductStock(tx, calc.lines, code, staffId);
-      if (calc.couponId) await tx.coupon.update({ where: { id: calc.couponId }, data: { usedCount: { increment: 1 } } });
+      if (calc.couponId) {
+        // Tăng lượt dùng có điều kiện để tránh vượt usageLimit khi nhiều người đặt cùng lúc
+        const c = await tx.coupon.findUniqueOrThrow({ where: { id: calc.couponId }, select: { usageLimit: true } });
+        const r = await tx.coupon.updateMany({
+          where: { id: calc.couponId, OR: [{ usageLimit: null }, ...(c.usageLimit !== null ? [{ usedCount: { lt: c.usageLimit } }] : [])] },
+          data: { usedCount: { increment: 1 } },
+        });
+        if (r.count === 0) throw new BadRequestException('Mã giảm giá đã hết lượt sử dụng');
+      }
       for (const promo of calc.appliedPromotions) await tx.promotion.update({ where: { id: promo.id }, data: { usedCount: { increment: 1 } } });
       for (const l of calc.lines)
         await tx.product.update({ where: { id: l.productId }, data: { soldCount: { increment: l.quantity } } });
@@ -321,9 +337,7 @@ export class OrdersService {
       ...(q.status && { status: q.status }),
       ...(q.paymentStatus && { paymentStatus: q.paymentStatus }),
       ...(q.channel && { channel: q.channel }),
-      ...((q.from || q.to) && {
-        createdAt: { ...(q.from && { gte: new Date(q.from) }), ...(q.to && { lte: new Date(q.to + 'T23:59:59') }) },
-      }),
+      ...((q.from || q.to) && { createdAt: buildDateRange(q.from, q.to) }),
       ...(q.search && {
         OR: [{ code: { contains: q.search } }, { customerName: { contains: q.search } }, { phone: { contains: q.search } }],
       }),

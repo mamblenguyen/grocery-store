@@ -159,7 +159,7 @@ function AdminShell({ children }: { children: React.ReactNode }) {
   const current = [...all].sort((a, b) => b.href.length - a.href.length).find((m) => (m.href === '/admin' ? pathname === '/admin' : pathname.startsWith(m.href)));
 
   const sidebar = (
-    <div className="flex h-full flex-col bg-ink text-slate-300">
+    <div className="flex h-full flex-col bg-sidebar text-slate-300">
       <Link href="/admin" className="flex items-center gap-3 px-5 py-5">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white"><Warehouse className="h-5 w-5" /></span>
         <span className="leading-tight"><span className="block font-bold text-white">{allMode ? 'Tất cả đối tác' : settings.storeName}</span><span className="text-xs text-slate-400">Quản trị cửa hàng</span></span>
