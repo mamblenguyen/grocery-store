@@ -102,7 +102,7 @@ export default function ProductDetailPage() {
             {variant?.compareAtPrice && variant.compareAtPrice > variant.price && (
               <>
                 <span className="text-gray-400 line-through">{money(variant.compareAtPrice)}</span>
-                <span className="badge bg-red-100 text-red-700">-{Math.round((1 - variant.price / variant.compareAtPrice) * 100)}%</span>
+                <span className="badge bg-accent-100 text-accent-700">-{Math.round((1 - variant.price / variant.compareAtPrice) * 100)}%</span>
               </>
             )}
             {!variant && p.maxPrice > p.minPrice && <span className="text-xl text-gray-500">– {money(p.maxPrice)}</span>}

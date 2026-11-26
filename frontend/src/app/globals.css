@@ -6,6 +6,12 @@
   --color-brand-500: #10b981;
   --color-brand-600: #059669;
   --color-brand-700: #047857;
+  /* Màu nhấn (huy hiệu giảm giá, số lượng giỏ) và thanh bên admin – cấu hình được ở /admin/settings */
+  --color-accent-100: #fee2e2;
+  --color-accent-500: #ef4444;
+  --color-accent-700: #b91c1c;
+  --color-sidebar: #111827;
+  --color-sidebar-hover: #1f2937;
 }
 
 body { @apply bg-gray-50 text-gray-800 antialiased; }

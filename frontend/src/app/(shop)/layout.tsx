@@ -48,7 +48,7 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
             <Link href="/cart" className="relative rounded-lg bg-brand-50 px-3 py-2 font-medium text-brand-700">
               🛍 Giỏ hàng
               {count > 0 && (
-                <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs text-white">
+                <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-500 px-1 text-xs text-white">
                   {count}
                 </span>
               )}
