@@ -8,6 +8,14 @@ import { AdminOnly } from '../common/decorators';
 const UPLOAD_DIR = join(process.cwd(), 'uploads');
 mkdirSync(UPLOAD_DIR, { recursive: true });
 
+const MIME_EXT: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+const ALLOWED_EXT = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+
 @Controller('admin/upload')
 @AdminOnly()
 export class UploadController {
@@ -18,11 +26,11 @@ export class UploadController {
       storage: diskStorage({
         destination: UPLOAD_DIR,
         filename: (_req, file, cb) =>
-          cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname).toLowerCase()}`),
+          cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${MIME_EXT[file.mimetype]}`),
       }),
       limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: (_req, file, cb) =>
-        /^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)
+        MIME_EXT[file.mimetype] && ALLOWED_EXT.includes(extname(file.originalname).toLowerCase())
           ? cb(null, true)
           : cb(new BadRequestException('Chỉ chấp nhận ảnh JPG, PNG, WEBP, GIF'), false),
     }),

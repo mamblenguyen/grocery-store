@@ -16,7 +16,10 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, transform: true, transformOptions: { enableImplicitConversion: true } }),
   );
   app.useGlobalFilters(new PrismaExceptionFilter());
-  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+    setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+  });
   const port = Number(process.env.PORT) || 4000;
   await app.listen(port);
   console.log(`🚀 API chạy tại http://localhost:${port}/api`);
