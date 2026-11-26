@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
-import { paged, paginate } from '../common/utils';
+import { buildDateRange, paged, paginate } from '../common/utils';
 import { CouponsService } from '../coupons/coupons.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto, PreviewOrderDto, QueryOrdersDto } from './dto/order.dto';
@@ -108,9 +108,7 @@ export class OrdersService {
     const where: Prisma.OrderWhereInput = {
       ...extra,
       ...(q.status && { status: q.status }),
-      ...((q.from || q.to) && {
-        createdAt: { ...(q.from && { gte: new Date(q.from) }), ...(q.to && { lte: new Date(q.to + 'T23:59:59') }) },
-      }),
+      ...((q.from || q.to) && { createdAt: buildDateRange(q.from, q.to) }),
       ...(q.search && {
         OR: [
           { code: { contains: q.search, mode: 'insensitive' } },
