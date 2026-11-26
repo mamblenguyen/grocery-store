@@ -54,18 +54,22 @@ export class OrdersService {
     let discount = 0;
     let couponCode: string | null = null;
     let couponId: number | null = null;
+    let couponUsageLimit: number | null = null;
     if (dto.couponCode) {
       const r = await this.coupons.apply(dto.couponCode, subtotal, tx);
       discount = r.discount;
       couponCode = r.coupon.code;
       couponId = r.coupon.id;
+      couponUsageLimit = r.coupon.usageLimit;
     }
     const shippingFee = subtotal >= FREE_SHIP ? 0 : SHIPPING_FEE;
-    return { lines, subtotal, discount, shippingFee, total: subtotal - discount + shippingFee, couponCode, couponId };
+    return {
+      lines, subtotal, discount, shippingFee, total: subtotal - discount + shippingFee, couponCode, couponId, couponUsageLimit,
+    };
   }
 
   async preview(dto: PreviewOrderDto) {
-    const { couponId, ...rest } = await this.calculate(dto);
+    const { couponId, couponUsageLimit, ...rest } = await this.calculate(dto);
     return { ...rest, freeShippingThreshold: FREE_SHIP };
   }
 
@@ -80,7 +84,18 @@ export class OrdersService {
         });
         if (r.count === 0) throw new BadRequestException(`"${l.productName} - ${l.variantName}" không đủ hàng`);
       }
-      if (calc.couponId) await tx.coupon.update({ where: { id: calc.couponId }, data: { usedCount: { increment: 1 } } });
+      if (calc.couponId) {
+        // Tăng lượt dùng có điều kiện để tránh vượt usageLimit khi nhiều người đặt cùng lúc
+        const limit = calc.couponUsageLimit;
+        const r = await tx.coupon.updateMany({
+          where: {
+            id: calc.couponId,
+            OR: [{ usageLimit: null }, ...(limit !== null ? [{ usedCount: { lt: limit } }] : [])],
+          },
+          data: { usedCount: { increment: 1 } },
+        });
+        if (r.count === 0) throw new BadRequestException('Mã giảm giá đã hết lượt sử dụng');
+      }
 
       const order = await tx.order.create({
         data: {
